@@ -25,16 +25,27 @@ internal class Program
         public uint Type;
     }
 
+    [Flags]
+    public enum MemoryProtection : uint
+    {
+        PAGE_READWRITE = 0x04,
+        PAGE_EXECUTE_READWRITE = 0x40,
+        PAGE_READONLY = 0x02
+    }
+
+    [Flags]
+    public enum ProcessAccessFlags : uint
+    {
+        PROCESS_VM_OPERATION = 0x0008,
+        PROCESS_VM_READ = 0x0010,
+        PROCESS_VM_WRITE = 0x0020,
+
+    }
+
     const int PROCESS_QUERY_INFORMATION = 0x0400;
-    const int PROCESS_VM_READ = 0x0010;
 
     private static void Main(string[] args)
     {
-        if (!IsAdministrator())
-        {
-            RelaunchAsAdministrator();
-        }
-
         var processes = Process.GetProcesses().ToList().GroupBy(p => p.ProcessName);
 
         int i = 0;
@@ -73,7 +84,7 @@ internal class Program
 
         foreach (Process selectedProcess in selectedProcesses)
         {
-            IntPtr handle = OpenProcess(PROCESS_VM_READ, false, selectedProcess.Id);
+            IntPtr handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_WRITE), false, selectedProcess.Id);
 
             IntPtr address = IntPtr.Zero;
             const uint bufferSize = 1024;
@@ -88,12 +99,19 @@ internal class Program
                 // Query memory region 
                 if (!VirtualQueryEx(handle, address, out memInfo, memInfoSize))
                 {
-                    Console.WriteLine("No more memory regions to query");
+                    Console.WriteLine("VirtualQueryEx failed");
                     break; // Exit the loop if VirtualQueryEx fails
                 }
 
+                if(memInfo.State == 0x10000)
+                {
+                    Console.WriteLine("Memory region is not committed, skipping");
+                    address = IntPtr.Add(memInfo.BaseAddress, memInfo.RegionSize.ToInt32());
+                    continue;
+                }
+
                 // Check if the memory region is readable
-                if (memInfo.State == PROCESS_VM_READ && (memInfo.Protect & PROCESS_QUERY_INFORMATION) != 0)
+                if ((memInfo.Protect & (uint)(MemoryProtection.PAGE_READWRITE | MemoryProtection.PAGE_EXECUTE_READWRITE | MemoryProtection.PAGE_READONLY)) != 0)
                 {
                     long regionSize = memInfo.RegionSize.ToInt64();
                     IntPtr regionBaseAddress = memInfo.BaseAddress;
@@ -130,32 +148,6 @@ internal class Program
                     break;
                 }
             }
-        }
-    }
-
-    static bool IsAdministrator()
-    {
-        // Check if the current process is running with admin privileges
-        var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
-        var principal = new System.Security.Principal.WindowsPrincipal(identity);
-        return principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
-    }
-    static void RelaunchAsAdministrator()
-    {
-        try
-        {
-            // Start the current process as Administrator
-            ProcessStartInfo startInfo = new ProcessStartInfo();
-            startInfo.Verb = "runas";  // Request elevated privileges
-            startInfo.FileName = System.Reflection.Assembly.GetExecutingAssembly().Location;  // Current executable file
-
-            // Start the new process
-            Process.Start(startInfo);
-            Environment.Exit(0);  // Exit the current process so it doesn't continue running with low permissions
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("An error occurred while trying to relaunch as administrator: " + ex.Message);
         }
     }
 }
