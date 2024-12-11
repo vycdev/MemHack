@@ -44,6 +44,36 @@ internal class Program
 
     const int PROCESS_QUERY_INFORMATION = 0x0400;
 
+    // Import Windows API functions for granting privileges
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern bool LookupPrivilegeValue(string lpSystemName, string lpName, out LUID lpLuid);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern bool AdjustTokenPrivileges(IntPtr TokenHandle, bool DisableAllPrivileges, ref TOKEN_PRIVILEGES NewState, uint BufferLength, IntPtr PreviousState, IntPtr ReturnLength);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LUID
+    {
+        public uint LowPart;
+        public int HighPart;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct TOKEN_PRIVILEGES
+    {
+        public uint PrivilegeCount;
+        public LUID Luid;
+        public uint Attributes;
+    }
+
+    const uint SE_PRIVILEGE_ENABLED = 0x00000002;
+    const string SE_DEBUG_NAME = "SeDebugPrivilege";
+    const uint TOKEN_ADJUST_PRIVILEGES = 0x0020;
+    const uint TOKEN_QUERY = 0x0008;
+
     private static void Main(string[] args)
     {
         var processes = Process.GetProcesses().ToList().GroupBy(p => p.ProcessName);
@@ -84,31 +114,34 @@ internal class Program
 
         foreach (Process selectedProcess in selectedProcesses)
         {
-            IntPtr handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_WRITE), false, selectedProcess.Id);
+            IntPtr handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_READ), false, selectedProcess.Id);
 
             IntPtr address = IntPtr.Zero;
             const uint bufferSize = 1024;
             byte[] buffer = new byte[bufferSize];
 
+            MEMORY_BASIC_INFORMATION memInfo = new();
+            uint memInfoSize = (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION));
+
+            // Search the value in the process memory
             while (true)
             {
-                // Search the value in the process memory
-                MEMORY_BASIC_INFORMATION memInfo = new();
-                uint memInfoSize = (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION));
-
                 // Query memory region 
                 if (!VirtualQueryEx(handle, address, out memInfo, memInfoSize))
                 {
-                    Console.WriteLine("VirtualQueryEx failed");
+                    Console.WriteLine("VirtualQueryEx failed, reached end of process' memory.");
                     break; // Exit the loop if VirtualQueryEx fails
                 }
 
-                if(memInfo.State == 0x10000)
+                // Skip uncommited memory regions 
+                if (memInfo.State == 0x10000 || memInfo.State == 0x2000)
                 {
-                    Console.WriteLine("Memory region is not committed, skipping");
-                    address = IntPtr.Add(memInfo.BaseAddress, memInfo.RegionSize.ToInt32());
+                    Console.WriteLine($"Memory region is not committed or reserved but unallocated, skipping: 0x{memInfo.BaseAddress.ToInt64():X}");
+                    address = (IntPtr)(memInfo.BaseAddress + memInfo.RegionSize.ToInt64());
                     continue;
                 }
+
+                Console.WriteLine($"Reading at base address 0x{memInfo.BaseAddress.ToInt64():X}");
 
                 // Check if the memory region is readable
                 if ((memInfo.Protect & (uint)(MemoryProtection.PAGE_READWRITE | MemoryProtection.PAGE_EXECUTE_READWRITE | MemoryProtection.PAGE_READONLY)) != 0)
@@ -122,18 +155,30 @@ internal class Program
 
                         try
                         {
-                            // read memory 
-                            if (ReadProcessMemory(handle, currentAddress, buffer, bufferSize, out nint bytesRead) && bytesRead.ToInt32() > 0)
+                            // Read memory 
+                            if (ReadProcessMemory(handle, currentAddress, buffer, bufferSize, out nint bytesRead) && bytesRead > 0)
                             {
-                                for (int j = 0; j < bytesRead.ToInt32() - sizeof(int); i++)
+                                for (int j = 0; j < bytesRead - sizeof(int); j++)
                                 {
                                     int readValue = BitConverter.ToInt32(buffer, j);
 
                                     if (readValue == value)
                                     {
-                                        Console.WriteLine("Found at: " + currentAddress);
+                                        IntPtr foundAddress = IntPtr.Add(currentAddress, j); // Calculate the exact address
+                                        Console.WriteLine($"Found at: 0x{foundAddress.ToInt64():X}");
                                     }
                                 }
+                            }
+                            else
+                            {
+                                // Handle errors and log the issue
+                                int errorCode = Marshal.GetLastWin32Error();
+                                if (errorCode == 5)
+                                    Console.WriteLine($"Access denied at address 0x{currentAddress.ToInt64():X}.");
+                                else if (errorCode == 299)
+                                    Console.WriteLine($"Partial read at address 0x{currentAddress.ToInt64():X}.");
+                                else
+                                    Console.WriteLine($"Failed to read memory at address 0x{currentAddress.ToInt64():X}. Error code: {errorCode}");
                             }
                         }
                         catch (Exception)
@@ -144,10 +189,42 @@ internal class Program
                 }
                 else
                 {
-                    Console.WriteLine("Memory region is not readable");
-                    break;
+                    Console.WriteLine($"Skipping non-readable memory region at 0x{memInfo.BaseAddress.ToInt64():X}");
                 }
+
+                // Read next memory region
+                address = (IntPtr)(memInfo.BaseAddress + memInfo.RegionSize.ToInt64());
             }
+        }
+    }
+
+    private static void EnableDebugPrivileges()
+    {
+        if (!OpenProcessToken(Process.GetCurrentProcess().Handle, TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out IntPtr tokenHandle))
+        {
+            Console.WriteLine("Failed to open process token.");
+            return;
+        }
+
+        TOKEN_PRIVILEGES tp = new()
+        {
+            PrivilegeCount = 1,
+            Attributes = SE_PRIVILEGE_ENABLED
+        };
+
+        if (!LookupPrivilegeValue(null, SE_DEBUG_NAME, out tp.Luid))
+        {
+            Console.WriteLine("Failed to look up privilege value.");
+            return;
+        }
+
+        if (!AdjustTokenPrivileges(tokenHandle, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero))
+        {
+            Console.WriteLine("Failed to adjust token privileges.");
+        }
+        else
+        {
+            Console.WriteLine("Debug privileges enabled.");
         }
     }
 }
