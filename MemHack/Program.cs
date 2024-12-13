@@ -50,38 +50,40 @@ internal class Program
 
     const int PROCESS_QUERY_INFORMATION = 0x0400;
 
-    //// Import Windows API functions for granting privileges
-    //[DllImport("advapi32.dll", SetLastError = true)]
-    //public static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
+    // Import Windows API functions for granting privileges
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
 
-    //[DllImport("advapi32.dll", SetLastError = true)]
-    //public static extern bool LookupPrivilegeValue(string lpSystemName, string lpName, out LUID lpLuid);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern bool LookupPrivilegeValue(string lpSystemName, string lpName, out LUID lpLuid);
 
-    //[DllImport("advapi32.dll", SetLastError = true)]
-    //public static extern bool AdjustTokenPrivileges(IntPtr TokenHandle, bool DisableAllPrivileges, ref TOKEN_PRIVILEGES NewState, uint BufferLength, IntPtr PreviousState, IntPtr ReturnLength);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern bool AdjustTokenPrivileges(IntPtr TokenHandle, bool DisableAllPrivileges, ref TOKEN_PRIVILEGES NewState, uint BufferLength, IntPtr PreviousState, IntPtr ReturnLength);
 
-    //[StructLayout(LayoutKind.Sequential)]
-    //public struct LUID
-    //{
-    //    public uint LowPart;
-    //    public int HighPart;
-    //}
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LUID
+    {
+        public uint LowPart;
+        public int HighPart;
+    }
 
-    //[StructLayout(LayoutKind.Sequential)]
-    //public struct TOKEN_PRIVILEGES
-    //{
-    //    public uint PrivilegeCount;
-    //    public LUID Luid;
-    //    public uint Attributes;
-    //}
+    [StructLayout(LayoutKind.Sequential)]
+    public struct TOKEN_PRIVILEGES
+    {
+        public uint PrivilegeCount;
+        public LUID Luid;
+        public uint Attributes;
+    }
 
-    //const uint SE_PRIVILEGE_ENABLED = 0x00000002;
-    //const string SE_DEBUG_NAME = "SeDebugPrivilege";
-    //const uint TOKEN_ADJUST_PRIVILEGES = 0x0020;
-    //const uint TOKEN_QUERY = 0x0008;
+    const uint SE_PRIVILEGE_ENABLED = 0x00000002;
+    const string SE_DEBUG_NAME = "SeDebugPrivilege";
+    const uint TOKEN_ADJUST_PRIVILEGES = 0x0020;
+    const uint TOKEN_QUERY = 0x0008;
 
     private static void Main(string[] args)
     {
+        EnableDebugPrivileges();
+
         var processes = Process.GetProcesses().ToList().GroupBy(p => p.ProcessName);
 
         int i = 0;
@@ -228,6 +230,9 @@ internal class Program
                             Console.WriteLine($"{k}. 0x{foundAddress.ToInt64():X}");
                             k++;
                         }
+                        
+                        Console.WriteLine("Press any key to continue...");
+                        Console.ReadKey();
                         break;
                     case "2":
                         Console.Write("Enter the new value: ");
@@ -252,10 +257,10 @@ internal class Program
                                     filteredPointers.Add(pointer);
                                 }
                             }
-                            else
+                            else if(Verbose)
                             {
                                 int errorCode = Marshal.GetLastWin32Error();
-                                Console.WriteLine($"Failed to read memory at {pointer:X}. Error code: {errorCode}");
+                                Console.WriteLine($"Failed to read memory at 0x{pointer:X}. Error code: {errorCode}");
                             }
                         }
 
@@ -308,39 +313,37 @@ internal class Program
                         break;
                 }
             }
+        }
+    }
 
-
+    private static void EnableDebugPrivileges()
+    {
+        if (!OpenProcessToken(Process.GetCurrentProcess().Handle, TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out IntPtr tokenHandle))
+        {
+            Console.WriteLine("Failed to open process token.");
+            return;
         }
 
+        TOKEN_PRIVILEGES tp = new()
+        {
+            PrivilegeCount = 1,
+            Attributes = SE_PRIVILEGE_ENABLED
+        };
+
+        if (!LookupPrivilegeValue(null, SE_DEBUG_NAME, out tp.Luid))
+        {
+            Console.WriteLine("Failed to look up privilege value.");
+            return;
+        }
+
+        if (!AdjustTokenPrivileges(tokenHandle, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero))
+        {
+            Console.WriteLine("Failed to adjust token privileges.");
+        }
+        else
+        {
+            Console.WriteLine("Debug privileges enabled.");
+        }
     }
-    //private static void EnableDebugPrivileges()
-    //{
-    //    if (!OpenProcessToken(Process.GetCurrentProcess().Handle, TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out IntPtr tokenHandle))
-    //    {
-    //        Console.WriteLine("Failed to open process token.");
-    //        return;
-    //    }
-
-    //    TOKEN_PRIVILEGES tp = new()
-    //    {
-    //        PrivilegeCount = 1,
-    //        Attributes = SE_PRIVILEGE_ENABLED
-    //    };
-
-    //    if (!LookupPrivilegeValue(null, SE_DEBUG_NAME, out tp.Luid))
-    //    {
-    //        Console.WriteLine("Failed to look up privilege value.");
-    //        return;
-    //    }
-
-    //    if (!AdjustTokenPrivileges(tokenHandle, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero))
-    //    {
-    //        Console.WriteLine("Failed to adjust token privileges.");
-    //    }
-    //    else
-    //    {
-    //        Console.WriteLine("Debug privileges enabled.");
-    //    }
-    //}
 }
 
