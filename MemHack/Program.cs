@@ -253,7 +253,7 @@ internal class Program
                         {
                             // filteredPointers.AddRange(GetMatchingPointers(pointer, newValue));
 
-                            if (ReadProcessMemory(handle, pointer, buffer, bufferSize, out nint bytesRead) && bytesRead == sizeof(int))
+                            if (ReadProcessMemory(handle, pointer, buffer, bufferSize, out nint bytesRead) && bytesRead > 0)
                             {
                                 int readValue = BitConverter.ToInt32(buffer, 0);
                                 if (readValue == newValue)
@@ -378,7 +378,7 @@ internal class Program
         {
             IntPtr currentAddress = IntPtr.Add(pointer, (int)offset);
 
-            if (ReadProcessMemory(handle, currentAddress, buffer, bufferSize, out nint bytesRead) && bytesRead == IntPtr.Size)
+            if (ReadProcessMemory(handle, currentAddress, buffer, bufferSize, out nint bytesRead) && bytesRead > 0)
             {
                 for (int j = 0; j < bytesRead - sizeof(int); j++)
                 {
