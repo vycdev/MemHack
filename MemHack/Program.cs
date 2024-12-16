@@ -1,18 +1,17 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Reflection;
 using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 using System.Security;
 
 internal class Program
 {
-    private const bool Verbose = false;
-    private const int maxDepth = 10;
     private static IntPtr address = IntPtr.Zero;
-    private static byte[] buffer;
+    private static byte[] buffer = [];
     private static List<IntPtr> foundAddresses = [];
     private static IntPtr handle = IntPtr.Zero;
-    private static uint bufferSize = 1024;
+    private static readonly uint bufferSize = 1024;
 
     #region WINAPI
     // Import Windows API functions
@@ -95,7 +94,7 @@ internal class Program
     {
         EnableDebugPrivileges();
 
-        var processes = Process.GetProcesses().ToList().GroupBy(p => p.ProcessName);
+        IEnumerable<IGrouping<string, Process>> processes = Process.GetProcesses().ToList().GroupBy(p => p.ProcessName);
 
         int i = 0;
         foreach (IGrouping<string, Process> processGroup in processes)
@@ -131,87 +130,12 @@ internal class Program
             return;
         }
 
-        foreach (Process selectedProcess in selectedProcesses)
-        {
-            handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_READ), false, selectedProcess.Id);
-
-            MEMORY_BASIC_INFORMATION memInfo = new();
-            uint memInfoSize = (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION));
-
-            // Search the value in the process memory
-            while (true)
-            {
-                // Query memory region 
-                if (!VirtualQueryEx(handle, address, out memInfo, memInfoSize))
-                {
-                    Console.WriteLine("VirtualQueryEx failed, reached end of process' memory.");
-                    break; // Exit the loop if VirtualQueryEx fails
-                }
-
-                // Skip uncommited memory regions 
-                if (memInfo.State == 0x10000 || memInfo.State == 0x2000)
-                {
-                    if (Verbose)
-                        Console.WriteLine($"Memory region is not committed or reserved but unallocated, skipping: 0x{memInfo.BaseAddress.ToInt64():X}");
-                    address = (IntPtr)(memInfo.BaseAddress + memInfo.RegionSize.ToInt64());
-                    continue;
-                }
-
-                if (Verbose)
-                    Console.WriteLine($"Reading at base address 0x{memInfo.BaseAddress.ToInt64():X}");
-
-                // Check if the memory region is readable and writable
-                if ((memInfo.Protect & (uint)(MemoryProtection.PAGE_READWRITE | MemoryProtection.PAGE_EXECUTE_READWRITE | MemoryProtection.PAGE_READONLY)) != 0)
-                {
-                    // bufferSize = (ulong)memInfo.RegionSize.ToInt64();
-                    buffer = new byte[bufferSize];
-                    IntPtr regionBaseAddress = memInfo.BaseAddress;
-
-                    foundAddresses.AddRange(GetMatchingPointers(regionBaseAddress, desiredValue, memInfo.RegionSize.ToInt64()));
-
-                    // Read memory 
-                    //if (ReadProcessMemory(handle, currentAddress, buffer, bufferSize, out nint bytesRead) && bytesRead > 0)
-                    //{
-                    //    for (int j = 0; j < bytesRead - sizeof(int); j++)
-                    //    {
-                    //        int readValue = BitConverter.ToInt32(buffer, j);
-
-                    //        if (readValue == value)
-                    //        {
-                    //            IntPtr foundAddress = IntPtr.Add(currentAddress, j); // Calculate the exact address
-                    //            foundAddresses.Add(foundAddress);
-                    //            if (Verbose)
-                    //                Console.WriteLine($"Found at: 0x{foundAddress.ToInt64():X}");
-                    //        }
-                    //    }
-                    //}
-                    //else if (Verbose)
-                    //{
-                    //    // Handle errors and log the issue
-                    //    int errorCode = Marshal.GetLastWin32Error();
-                    //    if (errorCode == 5)
-                    //        Console.WriteLine($"Access denied at address 0x{currentAddress.ToInt64():X}.");
-                    //    else if (errorCode == 299)
-                    //        Console.WriteLine($"Partial read at address 0x{currentAddress.ToInt64():X}.");
-                    //    else
-                    //        Console.WriteLine($"Failed to read memory at address 0x{currentAddress.ToInt64():X}. Error code: {errorCode}");
-                    //}
-                }
-                else if (Verbose)
-                {
-                    Console.WriteLine($"Skipping non-readable memory region at 0x{memInfo.BaseAddress.ToInt64():X}");
-                }
-
-                // Read next memory region
-                address = (IntPtr)(memInfo.BaseAddress + memInfo.RegionSize.ToInt64());
-            }
-        }
+        MemorySearch(selectedProcesses, desiredValue);
 
         int k = 0;
         while (true)
         {
-            if (!Verbose)
-                Console.Clear();
+            Console.Clear();
             Console.WriteLine("____________INFO____________");
             Console.WriteLine($"Addresses found: {foundAddresses.Count}");
             Console.WriteLine("____________MENU____________");
@@ -224,7 +148,6 @@ internal class Program
             Console.Write("Enter the option: ");
             string option = Console.ReadLine();
             if (option != null)
-            {
                 switch (option)
                 {
                     case "1":
@@ -239,7 +162,7 @@ internal class Program
                         Console.ReadKey();
                         break;
                     case "2":
-                         Console.Write("Enter the new value: ");
+                        Console.Write("Enter the new value: ");
                         isValue = int.TryParse(Console.ReadLine(), out int newValue);
 
                         if (!isValue)
@@ -248,31 +171,12 @@ internal class Program
                             break;
                         }
 
-                        List<IntPtr> filteredPointers = [];
-                        byte[] buffer = new byte[sizeof(int)];
+                        foundAddresses = FilterPointers(foundAddresses, newValue);
 
-                        foreach (IntPtr pointer in foundAddresses)
-                        {
-                            if (ReadProcessMemory(handle, pointer, buffer, (uint)buffer.Length, out nint bytesRead) && bytesRead == sizeof(int))
-                            {
-                                int readValue = BitConverter.ToInt32(buffer, 0);
-                                if (readValue == newValue)
-                                {
-                                    filteredPointers.Add(pointer);
-                                }
-                            }
-                            else if(Verbose)
-                            {
-                                int errorCode = Marshal.GetLastWin32Error();
-                                Console.WriteLine($"Failed to read memory at 0x{pointer:X}. Error code: {errorCode}");
-                            }
-                        }
-
-                        foundAddresses = filteredPointers;
                         break;
                     case "3":
-                        int index = 0; 
-                        if(foundAddresses.Count > 1)
+                        int index = 0;
+                        if (foundAddresses.Count > 1)
                         {
                             Console.WriteLine("Enter the address index: ");
                             isValue = int.TryParse(Console.ReadLine(), out index);
@@ -293,18 +197,7 @@ internal class Program
                             break;
                         }
 
-                        byte[] newValueBuffer = BitConverter.GetBytes(newAddressValue);
-                        IntPtr targetPointer = foundAddresses[index];
-
-                        if (WriteProcessMemory(handle, targetPointer, newValueBuffer, (uint)newValueBuffer.Length, out nint bytesWritten) && bytesWritten == newValueBuffer.Length)
-                        {
-                            Console.WriteLine($"Successfully wrote value {newAddressValue} to address 0x{targetPointer:X}.");
-                        }
-                        else
-                        {
-                            int errorCode = Marshal.GetLastWin32Error();
-                            Console.WriteLine($"Failed to write memory at 0x{targetPointer:X}. Error code: {errorCode}");
-                        }
+                        WriteAddressValue(foundAddresses[index], newAddressValue);
 
                         Console.WriteLine("Press any key to continue...");
                         Console.ReadKey();
@@ -319,35 +212,46 @@ internal class Program
                         Console.WriteLine("Invalid option");
                         break;
                 }
+        }
+    }
+
+    private static void WriteAddressValue(IntPtr targetPointer, int value)
+    {
+        byte[] newValueBuffer = BitConverter.GetBytes(value);
+
+        if (WriteProcessMemory(handle, targetPointer, newValueBuffer, (uint)newValueBuffer.Length, out nint bytesWritten) && bytesWritten == newValueBuffer.Length)
+            Console.WriteLine($"Successfully wrote value {value} to address 0x{targetPointer:X}.");
+        else
+            Console.WriteLine($"Failed to write memory at 0x{targetPointer:X}. Error code: {Marshal.GetLastWin32Error()}");
+    }
+
+    private static List<IntPtr> FilterPointers(List<IntPtr> pointers, int newValue)
+    {
+        List<IntPtr> filteredPointers = [];
+        byte[] buffer = new byte[sizeof(int)];
+
+        foreach (IntPtr pointer in foundAddresses)
+        {
+            if (ReadProcessMemory(handle, pointer, buffer, (uint)buffer.Length, out nint bytesRead) && bytesRead == sizeof(int))
+            {
+                int readValue = BitConverter.ToInt32(buffer, 0);
+                if (readValue == newValue)
+                {
+                    filteredPointers.Add(pointer);
+                }
             }
         }
+
+        return filteredPointers;
     }
 
     private static List<IntPtr> GetMatchingPointers(IntPtr pointer, int desiredValue, long regionSize)
     {
         List<IntPtr> result = [];
-        int depth = 0;
 
-        // Read memory 
-        //if (ReadProcessMemory(handle, currentAddress, buffer, bufferSize, out nint bytesRead) && bytesRead > 0)
-        //{
-        //    for (int j = 0; j < bytesRead - sizeof(int); j++)
-        //    {
-        //        int readValue = BitConverter.ToInt32(buffer, j);
-
-        //        if (readValue == value)
-        //        {
-        //            IntPtr foundAddress = IntPtr.Add(currentAddress, j); // Calculate the exact address
-        //            foundAddresses.Add(foundAddress);
-        //            if (Verbose)
-        //                Console.WriteLine($"Found at: 0x{foundAddress.ToInt64():X}");
-        //        }
-        //    }
-        //}
-        // Read the pointer at the current address
         for (long offset = 0; offset < regionSize; offset += bufferSize)
         {
-            IntPtr currentAddress = IntPtr.Add(pointer, (int)offset);   
+            IntPtr currentAddress = IntPtr.Add(pointer, (int)offset);
 
             if (ReadProcessMemory(handle, currentAddress, buffer, bufferSize, out nint bytesRead) && bytesRead > 0)
             {
@@ -355,33 +259,51 @@ internal class Program
                 {
                     int value = BitConverter.ToInt32(buffer, j);
 
+                    IntPtr address = IntPtr.Add(currentAddress, j); // Calculate the exact address
+
                     if (value == desiredValue)
-                    {
-                        IntPtr foundAddress = IntPtr.Add(currentAddress, j); // Calculate the exact address
-                        result.Add(foundAddress);
-                        if (Verbose)
-                            Console.WriteLine($"Found at: 0x{currentAddress.ToInt64():X}");
-                    }
+                        result.Add(address);
                 }
-
-                // currentAddress = IntPtr.Add(currentAddress, (int)bufferSize - sizeof(int) + 1);
-
-
-                //// Dereference the pointer
-                //currentAddress = (IntPtr)BitConverter.ToInt64(buffer, 0);
-
-                //if (!IsValidPointer(currentAddress))
-                //    break;
-            }
-            else
-            {
-                if (Verbose)
-                    Console.WriteLine($"Failed to read memory at 0x{currentAddress:X}. Error code: {Marshal.GetLastWin32Error()}");
-                //break; // Stop if the chain breaks
             }
         }
 
         return result;
+    }
+
+    private static void MemorySearch(IEnumerable<Process> selectedProcesses, int desiredValue)
+    {
+        foreach (Process selectedProcess in selectedProcesses)
+        {
+            handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_READ), false, selectedProcess.Id);
+
+            MEMORY_BASIC_INFORMATION memInfo = new();
+            uint memInfoSize = (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION));
+
+            // Search the value in the process memory
+            while (true)
+            {
+                if (!VirtualQueryEx(handle, address, out memInfo, memInfoSize))
+                    break;
+
+                // Skip uncommited memory regions 
+                if (memInfo.State == 0x10000 || memInfo.State == 0x2000)
+                {
+                    address = (IntPtr)(memInfo.BaseAddress + memInfo.RegionSize.ToInt64());
+                    continue;
+                }
+
+                // Check if the memory region is readable and writable
+                if ((memInfo.Protect & (uint)(MemoryProtection.PAGE_READWRITE | MemoryProtection.PAGE_EXECUTE_READWRITE | MemoryProtection.PAGE_READONLY)) != 0)
+                {
+                    buffer = new byte[bufferSize];
+                    IntPtr regionBaseAddress = memInfo.BaseAddress;
+
+                    foundAddresses.AddRange(GetMatchingPointers(regionBaseAddress, desiredValue, memInfo.RegionSize.ToInt64()));
+                }
+
+                address = (IntPtr)(memInfo.BaseAddress + memInfo.RegionSize.ToInt64());
+            }
+        }
     }
 
     private static bool IsValidPointer(IntPtr address)
@@ -417,13 +339,9 @@ internal class Program
         }
 
         if (!AdjustTokenPrivileges(tokenHandle, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero))
-        {
             Console.WriteLine("Failed to adjust token privileges.");
-        }
         else
-        {
             Console.WriteLine("Debug privileges enabled.");
-        }
     }
 }
 
