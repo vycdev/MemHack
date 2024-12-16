@@ -12,7 +12,7 @@ internal class Program
     private static byte[] buffer;
     private static List<IntPtr> foundAddresses = [];
     private static IntPtr handle = IntPtr.Zero;
-    private static uint bufferSize = 256;
+    private static uint bufferSize = 1024;
 
     #region WINAPI
     // Import Windows API functions
@@ -161,7 +161,7 @@ internal class Program
                     Console.WriteLine($"Reading at base address 0x{memInfo.BaseAddress.ToInt64():X}");
 
                 // Check if the memory region is readable and writable
-                if (IsValidPointer(address))
+                if ((memInfo.Protect & (uint)(MemoryProtection.PAGE_READWRITE | MemoryProtection.PAGE_EXECUTE_READWRITE | MemoryProtection.PAGE_READONLY)) != 0)
                 {
                     // bufferSize = (ulong)memInfo.RegionSize.ToInt64();
                     buffer = new byte[bufferSize];
@@ -239,7 +239,7 @@ internal class Program
                         Console.ReadKey();
                         break;
                     case "2":
-                        Console.Write("Enter the new value: ");
+                         Console.Write("Enter the new value: ");
                         isValue = int.TryParse(Console.ReadLine(), out int newValue);
 
                         if (!isValue)
@@ -249,11 +249,11 @@ internal class Program
                         }
 
                         List<IntPtr> filteredPointers = [];
+                        byte[] buffer = new byte[sizeof(int)];
+
                         foreach (IntPtr pointer in foundAddresses)
                         {
-                            // filteredPointers.AddRange(GetMatchingPointers(pointer, newValue));
-
-                            if (ReadProcessMemory(handle, pointer, buffer, bufferSize, out nint bytesRead) && bytesRead > 0)
+                            if (ReadProcessMemory(handle, pointer, buffer, (uint)buffer.Length, out nint bytesRead) && bytesRead == sizeof(int))
                             {
                                 int readValue = BitConverter.ToInt32(buffer, 0);
                                 if (readValue == newValue)
@@ -261,7 +261,7 @@ internal class Program
                                     filteredPointers.Add(pointer);
                                 }
                             }
-                            else if (Verbose)
+                            else if(Verbose)
                             {
                                 int errorCode = Marshal.GetLastWin32Error();
                                 Console.WriteLine($"Failed to read memory at 0x{pointer:X}. Error code: {errorCode}");
@@ -271,8 +271,8 @@ internal class Program
                         foundAddresses = filteredPointers;
                         break;
                     case "3":
-                        int index = 0;
-                        if (foundAddresses.Count > 1)
+                        int index = 0; 
+                        if(foundAddresses.Count > 1)
                         {
                             Console.WriteLine("Enter the address index: ");
                             isValue = int.TryParse(Console.ReadLine(), out index);
@@ -296,44 +296,15 @@ internal class Program
                         byte[] newValueBuffer = BitConverter.GetBytes(newAddressValue);
                         IntPtr targetPointer = foundAddresses[index];
 
-                        IntPtr currentPointer = targetPointer;
-                        for (int depth = 0; depth < maxDepth; depth++)
+                        if (WriteProcessMemory(handle, targetPointer, newValueBuffer, (uint)newValueBuffer.Length, out nint bytesWritten) && bytesWritten == newValueBuffer.Length)
                         {
-                            if (ReadProcessMemory(handle, currentPointer, buffer, (uint)bufferSize, out nint bytesRead) && bytesRead == IntPtr.Size)
-                            {
-                                currentPointer = (IntPtr)BitConverter.ToInt64(buffer, 0); // Get the next pointer in the chain
-
-                                if (depth == maxDepth - 1)
-                                {
-                                    // Write the new value to the final pointer
-                                    if (WriteProcessMemory(handle, currentPointer, newValueBuffer, (uint)newValueBuffer.Length, out nint bytesWritten) && bytesWritten == newValueBuffer.Length)
-                                    {
-                                        Console.WriteLine($"Successfully wrote value {newAddressValue} to address 0x{currentPointer:X}.");
-                                    }
-                                    else
-                                    {
-                                        int errorCode = Marshal.GetLastWin32Error();
-                                        Console.WriteLine($"Failed to write memory at 0x{currentPointer:X}. Error code: {errorCode}");
-                                    }
-                                    break;
-                                }
-                            }
-                            else
-                            {
-                                Console.WriteLine($"Failed to read memory at 0x{currentPointer:X}. Stopping chain trace.");
-                                break;
-                            }
+                            Console.WriteLine($"Successfully wrote value {newAddressValue} to address 0x{targetPointer:X}.");
                         }
-
-                        //if (WriteProcessMemory(handle, targetPointer, newValueBuffer, (uint)newValueBuffer.Length, out nint bytesWritten) && bytesWritten == newValueBuffer.Length)
-                        //{
-                        //    Console.WriteLine($"Successfully wrote value {newAddressValue} to address 0x{targetPointer:X}.");
-                        //}
-                        //else
-                        //{
-                        //    int errorCode = Marshal.GetLastWin32Error();
-                        //    Console.WriteLine($"Failed to write memory at 0x{targetPointer:X}. Error code: {errorCode}");
-                        //}
+                        else
+                        {
+                            int errorCode = Marshal.GetLastWin32Error();
+                            Console.WriteLine($"Failed to write memory at 0x{targetPointer:X}. Error code: {errorCode}");
+                        }
 
                         Console.WriteLine("Press any key to continue...");
                         Console.ReadKey();
@@ -376,7 +347,7 @@ internal class Program
         // Read the pointer at the current address
         for (long offset = 0; offset < regionSize; offset += bufferSize)
         {
-            IntPtr currentAddress = IntPtr.Add(pointer, (int)offset);
+            IntPtr currentAddress = IntPtr.Add(pointer, (int)offset);   
 
             if (ReadProcessMemory(handle, currentAddress, buffer, bufferSize, out nint bytesRead) && bytesRead > 0)
             {
@@ -387,7 +358,7 @@ internal class Program
                     if (value == desiredValue)
                     {
                         IntPtr foundAddress = IntPtr.Add(currentAddress, j); // Calculate the exact address
-                        result.Add(currentAddress);
+                        result.Add(foundAddress);
                         if (Verbose)
                             Console.WriteLine($"Found at: 0x{currentAddress.ToInt64():X}");
                     }
