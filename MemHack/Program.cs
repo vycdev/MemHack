@@ -12,7 +12,7 @@ internal class Program
     private static List<IntPtr> foundAddresses = [];
     private static IntPtr handle = IntPtr.Zero;
     private static readonly uint bufferSize = 1024;
-    private static Type valueType = typeof(int);
+    private static Type valueType = typeof(int); // short, int, long
 
     #region WINAPI
     // Import Windows API functions
