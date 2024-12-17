@@ -12,6 +12,7 @@ internal class Program
     private static List<IntPtr> foundAddresses = [];
     private static IntPtr handle = IntPtr.Zero;
     private static readonly uint bufferSize = 1024;
+    private static Type valueType = typeof(int);
 
     #region WINAPI
     // Import Windows API functions
@@ -122,7 +123,7 @@ internal class Program
         IGrouping<string, Process> selectedProcesses = processes.ElementAt(processNumber);
 
         Console.Write("Enter the value: ");
-        bool isValue = int.TryParse(Console.ReadLine(), out int desiredValue);
+        bool isValue = long.TryParse(Console.ReadLine(), out long desiredValue);
 
         if (!isValue)
         {
@@ -163,7 +164,7 @@ internal class Program
                         break;
                     case "2":
                         Console.Write("Enter the new value: ");
-                        isValue = int.TryParse(Console.ReadLine(), out int newValue);
+                        isValue = long.TryParse(Console.ReadLine(), out long newValue);
 
                         if (!isValue)
                         {
@@ -204,6 +205,11 @@ internal class Program
 
                         break;
                     case "4":
+                        address = IntPtr.Zero;
+                        buffer = [];
+                        foundAddresses = [];
+                        handle = IntPtr.Zero;
+                        valueType = typeof(short);
                         Main(args);
                         break;
                     case "5":
@@ -215,9 +221,15 @@ internal class Program
         }
     }
 
-    private static void WriteAddressValue(IntPtr targetPointer, int value)
+    private static void WriteAddressValue(IntPtr targetPointer, long value)
     {
-        byte[] newValueBuffer = BitConverter.GetBytes(value);
+        byte[] newValueBuffer = valueType switch
+        {
+            var valueType when valueType == typeof(short) => BitConverter.GetBytes((short)value),
+            var valueType when valueType == typeof(int) => BitConverter.GetBytes((int)value),
+            var valueType when valueType == typeof(long) => BitConverter.GetBytes(value),
+            _ => BitConverter.GetBytes((int)value)
+        };
 
         if (WriteProcessMemory(handle, targetPointer, newValueBuffer, (uint)newValueBuffer.Length, out nint bytesWritten) && bytesWritten == newValueBuffer.Length)
             Console.WriteLine($"Successfully wrote value {value} to address 0x{targetPointer:X}.");
@@ -225,16 +237,16 @@ internal class Program
             Console.WriteLine($"Failed to write memory at 0x{targetPointer:X}. Error code: {Marshal.GetLastWin32Error()}");
     }
 
-    private static List<IntPtr> FilterPointers(List<IntPtr> pointers, int newValue)
+    private static List<IntPtr> FilterPointers(List<IntPtr> pointers, long newValue)
     {
         List<IntPtr> filteredPointers = [];
-        byte[] buffer = new byte[sizeof(int)];
+        byte[] buffer = new byte[Marshal.SizeOf(valueType)];
 
         foreach (IntPtr pointer in foundAddresses)
         {
-            if (ReadProcessMemory(handle, pointer, buffer, (uint)buffer.Length, out nint bytesRead) && bytesRead == sizeof(int))
+            if (ReadProcessMemory(handle, pointer, buffer, (uint)buffer.Length, out nint bytesRead) && bytesRead > 0)
             {
-                int readValue = BitConverter.ToInt32(buffer, 0);
+                long readValue = BufferConvert(buffer, 0);
                 if (readValue == newValue)
                 {
                     filteredPointers.Add(pointer);
@@ -245,7 +257,7 @@ internal class Program
         return filteredPointers;
     }
 
-    private static List<IntPtr> GetMatchingPointers(IntPtr pointer, int desiredValue, long regionSize)
+    private static List<IntPtr> GetMatchingPointers(IntPtr pointer, long desiredValue, long regionSize)
     {
         List<IntPtr> result = [];
 
@@ -255,9 +267,9 @@ internal class Program
 
             if (ReadProcessMemory(handle, currentAddress, buffer, bufferSize, out nint bytesRead) && bytesRead > 0)
             {
-                for (int j = 0; j < bytesRead - sizeof(int); j++)
+                for (int j = 0; j < bytesRead - Marshal.SizeOf(valueType); j++)
                 {
-                    int value = BitConverter.ToInt32(buffer, j);
+                    long value = BufferConvert(buffer, j);
 
                     IntPtr address = IntPtr.Add(currentAddress, j); // Calculate the exact address
 
@@ -270,7 +282,7 @@ internal class Program
         return result;
     }
 
-    private static void MemorySearch(IEnumerable<Process> selectedProcesses, int desiredValue)
+    private static void MemorySearch(IEnumerable<Process> selectedProcesses, long desiredValue)
     {
         foreach (Process selectedProcess in selectedProcesses)
         {
@@ -316,6 +328,14 @@ internal class Program
         // Check if the memory is committed and accessible
         return (mbi.Protect & (uint)(MemoryProtection.PAGE_READWRITE | MemoryProtection.PAGE_EXECUTE_READWRITE | MemoryProtection.PAGE_READONLY)) != 0;
     }
+
+    private static long BufferConvert(byte[] buffer, int offset) => valueType switch
+    {
+        var valueType when valueType == typeof(short) => BitConverter.ToInt16(buffer, offset),
+        var valueType when valueType == typeof(int) => BitConverter.ToInt32(buffer, offset),
+        var valueType when valueType == typeof(long) => BitConverter.ToInt64(buffer, offset),
+        _ => BitConverter.ToInt32(buffer, offset),
+    };
 
 
     private static void EnableDebugPrivileges()
