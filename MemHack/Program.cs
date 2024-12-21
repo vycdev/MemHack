@@ -11,7 +11,7 @@ using System.Security;
 internal class Program
 {
     private static byte[] buffer = [];
-    private static readonly uint bufferSize = 1024;
+    private const uint bufferSize = 1024;
     private static Type valueType = typeof(short); // short, int, long
 
     private static List<IntPtr> foundAddresses = [];
@@ -242,6 +242,7 @@ internal class Program
     private static List<IntPtr> MemorySearch(IEnumerable<Process> selectedProcesses, long desiredValue)
     {
         ConcurrentBag<IntPtr> result = [];
+        int valueSize = Marshal.SizeOf(valueType);
 
         Parallel.ForEach(selectedProcesses, selectedProcess =>
         {
@@ -281,14 +282,24 @@ internal class Program
 
                         if (ReadProcessMemory(handle, currentAddress, buffer, bufferSize, out nint bytesRead) && bytesRead > 0)
                         {
-                            for (int j = 0; j < bytesRead - Marshal.SizeOf(valueType); j++)
-                            {
-                                long value = BufferConvert(buffer, j);
+                            byte[] desiredBytes = BitConverter.GetBytes(desiredValue);
 
-                                if (value == desiredValue)
+                            for (int j = 0; j <= bytesRead - valueSize; j++)
+                            {
+                                bool match = true;
+                                for (int k = 0; k < valueSize; k++)
+                                {
+                                    if (buffer[j + k] != desiredBytes[k])
+                                    {
+                                        match = false;
+                                        break;
+                                    }
+                                }
+
+                                if (match)
                                 {
                                     IntPtr pointer = IntPtr.Add(currentAddress, j);
-                                    result.Add(pointer); // Add found pointer to the thread-safe collection
+                                    result.Add(pointer); // Add to thread-safe collection
                                 }
                             }
                         }
