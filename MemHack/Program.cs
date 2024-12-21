@@ -11,7 +11,7 @@ internal class Program
 {
     private static byte[] buffer = [];
     private static readonly uint bufferSize = 1024;
-    private static Type valueType = typeof(int); // short, int, long
+    private static Type valueType = typeof(short); // short, int, long
 
     private static List<IntPtr> foundAddresses = [];
     private static List<PointerNode> foundChains = [];
@@ -137,19 +137,19 @@ internal class Program
         }
 
         Console.WriteLine("Searching for addresses...");
-        foundAddresses.AddRange(MemorySearch(selectedProcesses, desiredValue));
+        foundAddresses = MemorySearch(selectedProcesses, desiredValue);
 
-        Console.WriteLine("Building up pointers cache...");
-        CacheMemoryPointers(selectedProcesses);
+        // Console.WriteLine("Building up pointers cache...");
+        // CacheMemoryPointers(selectedProcesses);
 
-        Console.WriteLine("Searching for pointer chains...");
-        foreach (IntPtr foundAddress in foundAddresses)
-        {
-            PointerNode? pointerChain = GetPointerChain(selectedProcesses, foundAddress);
+        //Console.WriteLine("Searching for pointer chains...");
+        //foreach (IntPtr foundAddress in foundAddresses)
+        //{
+        //    PointerNode? pointerChain = GetPointerChain(selectedProcesses, foundAddress);
 
-            if (pointerChain?.Nodes.Count > 0)
-                foundChains.AddRange(pointerChain.Nodes);
-        }
+        //    if (pointerChain?.Nodes.Count > 0)
+        //        foundChains.AddRange(pointerChain.Nodes);
+        //}
 
         int k = 0;
         while (true)
@@ -192,7 +192,7 @@ internal class Program
                             break;
                         }
 
-                        foundAddresses = FilterPointers(foundAddresses, newValue);
+                        foundAddresses = FilterPointers(selectedProcesses, foundAddresses, newValue);
 
                         break;
                     case "3":
@@ -278,7 +278,7 @@ internal class Program
             }
         }
 
-        return result;
+        return result.ToHashSet().ToList();
     }
 
     private static void WriteAddressValue(IntPtr targetPointer, long value)
@@ -300,6 +300,7 @@ internal class Program
     private static List<IntPtr> GetMatchingPointers(IntPtr pointer, long desiredValue, long regionSize)
     {
         List<IntPtr> result = [];
+        int valueSize = Marshal.SizeOf(valueType); 
 
         for (long offset = 0; offset < regionSize; offset += bufferSize)
         {
@@ -307,7 +308,7 @@ internal class Program
 
             if (ReadProcessMemory(handle, currentAddress, buffer, bufferSize, out nint bytesRead) && bytesRead > 0)
             {
-                for (int j = 0; j < bytesRead - Marshal.SizeOf(valueType); j++)
+                for (int j = 0; j < bytesRead - valueSize; j += valueSize)
                 {
                     long value = BufferConvert(buffer, j);
 
@@ -322,24 +323,27 @@ internal class Program
         return result;
     }
 
-    private static List<IntPtr> FilterPointers(List<IntPtr> pointers, long newValue)
+    private static List<IntPtr> FilterPointers(IEnumerable<Process> selectedProcesses, List<IntPtr> pointers, long newValue)
     {
-        List<IntPtr> filteredPointers = [];
+        HashSet<IntPtr> filteredPointers = [];
         byte[] buffer = new byte[Marshal.SizeOf(valueType)];
 
-        foreach (IntPtr pointer in foundAddresses)
+        foreach (Process selectedProcess in selectedProcesses)
         {
-            if (ReadProcessMemory(handle, pointer, buffer, (uint)buffer.Length, out nint bytesRead) && bytesRead > 0)
+            handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_READ), false, selectedProcess.Id);
+
+            foreach (IntPtr pointer in foundAddresses)
             {
-                long readValue = BufferConvert(buffer, 0);
-                if (readValue == newValue)
+                if (ReadProcessMemory(handle, pointer, buffer, (uint)buffer.Length, out nint bytesRead) && bytesRead > 0)
                 {
-                    filteredPointers.Add(pointer);
+                    long readValue = BufferConvert(buffer, 0);
+                    if (readValue == newValue)
+                        filteredPointers.Add(pointer);
                 }
             }
         }
 
-        return filteredPointers;
+        return [.. filteredPointers];
     }
 
     private static PointerNode? GetPointerChain(IEnumerable<Process> processes, IntPtr desiredPointer, int depth = 0)
