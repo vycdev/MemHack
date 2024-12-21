@@ -1,5 +1,6 @@
 ﻿using MemHackMe;
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Reflection;
 using System.Reflection.Metadata;
@@ -16,8 +17,6 @@ internal class Program
     private static List<IntPtr> foundAddresses = [];
     private static List<PointerNode> foundChains = [];
     private static HashSet<IntPtr> pointerAddressesCache = [];
-
-    private static IntPtr handle = IntPtr.Zero;
 
     #region WINAPI
     // Import Windows API functions
@@ -175,7 +174,8 @@ internal class Program
                         k = 0;
                         foreach (IntPtr foundAddress in foundAddresses)
                         {
-                            Console.WriteLine($"{k}. 0x{foundAddress.ToInt64():X}");
+                            long value = BufferConvert(buffer, 0);
+                            Console.WriteLine($"{k}. 0x{foundAddress.ToInt64():X} - {value}");
                             k++;
                         }
 
@@ -218,7 +218,7 @@ internal class Program
                             break;
                         }
 
-                        WriteAddressValue(foundAddresses[index], newAddressValue);
+                        WriteAddressValue(selectedProcesses, foundAddresses[index], newAddressValue);
 
                         Console.WriteLine("Press any key to continue...");
                         Console.ReadKey();
@@ -227,7 +227,6 @@ internal class Program
                     case "4":
                         buffer = [];
                         foundAddresses = [];
-                        handle = IntPtr.Zero;
                         valueType = typeof(short);
                         Main(args);
                         break;
@@ -242,23 +241,22 @@ internal class Program
 
     private static List<IntPtr> MemorySearch(IEnumerable<Process> selectedProcesses, long desiredValue)
     {
-        List<IntPtr> result = [];
+        ConcurrentBag<IntPtr> result = new(); // Thread-safe collection for results
 
-        foreach (Process selectedProcess in selectedProcesses)
+        Parallel.ForEach(selectedProcesses, selectedProcess =>
         {
             IntPtr address = IntPtr.Zero;
-            handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_READ), false, selectedProcess.Id);
+            IntPtr handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_READ), false, selectedProcess.Id);
 
             MEMORY_BASIC_INFORMATION memInfo = new();
             uint memInfoSize = (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION));
 
-            // Search the value in the process memory
             while (true)
             {
                 if (!VirtualQueryEx(handle, address, out memInfo, memInfoSize))
                     break;
 
-                // Skip uncommited memory regions 
+                // Skip uncommitted memory regions 
                 if (memInfo.State == 0x10000 || memInfo.State == 0x2000)
                 {
                     address = (IntPtr)(memInfo.BaseAddress + memInfo.RegionSize.ToInt64());
@@ -268,20 +266,43 @@ internal class Program
                 // Check if the memory region is readable and writable
                 if ((memInfo.Protect & (uint)(MemoryProtection.PAGE_READWRITE | MemoryProtection.PAGE_EXECUTE_READWRITE | MemoryProtection.PAGE_READONLY)) != 0)
                 {
-                    buffer = new byte[bufferSize];
                     IntPtr regionBaseAddress = memInfo.BaseAddress;
+                    long regionSize = memInfo.RegionSize.ToInt64();
 
-                    result.AddRange(GetMatchingPointers(regionBaseAddress, desiredValue, memInfo.RegionSize.ToInt64()));
+                    // Process memory region in chunks
+                    Parallel.For(0, (int)Math.Ceiling((double)regionSize / bufferSize), chunk =>
+                    {
+                        long offset = chunk * bufferSize;
+                        if (offset >= regionSize)
+                            return;
+
+                        IntPtr currentAddress = IntPtr.Add(regionBaseAddress, (int)offset);
+                        byte[] buffer = new byte[bufferSize];
+
+                        if (ReadProcessMemory(handle, currentAddress, buffer, bufferSize, out nint bytesRead) && bytesRead > 0)
+                        {
+                            for (int j = 0; j < bytesRead - Marshal.SizeOf(valueType); j++)
+                            {
+                                long value = BufferConvert(buffer, j);
+
+                                if (value == desiredValue)
+                                {
+                                    IntPtr pointer = IntPtr.Add(currentAddress, j);
+                                    result.Add(pointer); // Add found pointer to the thread-safe collection
+                                }
+                            }
+                        }
+                    });
                 }
 
                 address = (IntPtr)(memInfo.BaseAddress + memInfo.RegionSize.ToInt64());
             }
-        }
+        });
 
-        return result.ToHashSet().ToList();
+        return result.ToHashSet().ToList(); // Ensure unique results
     }
 
-    private static void WriteAddressValue(IntPtr targetPointer, long value)
+    private static void WriteAddressValue(IEnumerable<Process> selectedProcesses, IntPtr targetPointer, long value)
     {
         byte[] newValueBuffer = valueType switch
         {
@@ -291,16 +312,22 @@ internal class Program
             _ => BitConverter.GetBytes((int)value)
         };
 
-        if (WriteProcessMemory(handle, targetPointer, newValueBuffer, (uint)newValueBuffer.Length, out nint bytesWritten) && bytesWritten == newValueBuffer.Length)
-            Console.WriteLine($"Successfully wrote value {value} to address 0x{targetPointer:X}.");
-        else
-            Console.WriteLine($"Failed to write memory at 0x{targetPointer:X}. Error code: {Marshal.GetLastWin32Error()}");
+        Console.WriteLine("Attempting memory override for each subprocess...");
+        foreach (Process item in selectedProcesses)
+        {
+            IntPtr handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE), false, item.Id);
+
+            if (WriteProcessMemory(handle, targetPointer, newValueBuffer, (uint)newValueBuffer.Length, out nint bytesWritten) && bytesWritten == newValueBuffer.Length)
+                Console.WriteLine($"Successfully wrote value {value} to address 0x{targetPointer:X}.");
+            else
+                Console.WriteLine($"Failed to write memory at 0x{targetPointer:X}. Error code: {Marshal.GetLastWin32Error()}");
+        }
     }
 
-    private static List<IntPtr> GetMatchingPointers(IntPtr pointer, long desiredValue, long regionSize)
+    private static List<IntPtr> GetMatchingPointers(IntPtr handle, IntPtr pointer, long desiredValue, long regionSize)
     {
         List<IntPtr> result = [];
-        int valueSize = Marshal.SizeOf(valueType); 
+        int valueSize = Marshal.SizeOf(valueType);
 
         for (long offset = 0; offset < regionSize; offset += bufferSize)
         {
@@ -330,7 +357,7 @@ internal class Program
 
         foreach (Process selectedProcess in selectedProcesses)
         {
-            handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_READ), false, selectedProcess.Id);
+            IntPtr handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_READ), false, selectedProcess.Id);
 
             foreach (IntPtr pointer in foundAddresses)
             {
@@ -387,7 +414,7 @@ internal class Program
         foreach (Process selectedProcess in selectedProcesses)
         {
             IntPtr address = IntPtr.Zero;
-            handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_READ), false, selectedProcess.Id);
+            IntPtr handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_READ), false, selectedProcess.Id);
 
             MEMORY_BASIC_INFORMATION memInfo = new();
             uint memInfoSize = (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION));
@@ -420,7 +447,7 @@ internal class Program
                             {
                                 long value = BufferConvert(buffer, j);
 
-                                if (IsValidPointer((IntPtr)(value)))
+                                if (IsValidPointer(handle, (IntPtr)(value)))
                                 {
                                     IntPtr pointer = IntPtr.Add(currentAddress, j); // Calculate the exact address
                                     pointerAddressesCache.Add(address);
@@ -437,7 +464,7 @@ internal class Program
         valueType = valueTypeBefore;
     }
 
-    private static bool IsValidPointer(IntPtr address)
+    private static bool IsValidPointer(IntPtr handle, IntPtr address)
     {
         bool result = VirtualQueryEx(handle, address, out MEMORY_BASIC_INFORMATION mbi, (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION)));
 
