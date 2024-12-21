@@ -241,7 +241,7 @@ internal class Program
 
     private static List<IntPtr> MemorySearch(IEnumerable<Process> selectedProcesses, long desiredValue)
     {
-        ConcurrentBag<IntPtr> result = new(); // Thread-safe collection for results
+        ConcurrentBag<IntPtr> result = [];
 
         Parallel.ForEach(selectedProcesses, selectedProcess =>
         {
@@ -299,7 +299,7 @@ internal class Program
             }
         });
 
-        return result.ToHashSet().ToList(); // Ensure unique results
+        return [.. result.Distinct()];
     }
 
     private static void WriteAddressValue(IEnumerable<Process> selectedProcesses, IntPtr targetPointer, long value)
@@ -352,25 +352,28 @@ internal class Program
 
     private static List<IntPtr> FilterPointers(IEnumerable<Process> selectedProcesses, List<IntPtr> pointers, long newValue)
     {
-        HashSet<IntPtr> filteredPointers = [];
-        byte[] buffer = new byte[Marshal.SizeOf(valueType)];
+        ConcurrentBag<IntPtr> filteredPointers = [];
 
         foreach (Process selectedProcess in selectedProcesses)
         {
             IntPtr handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_READ), false, selectedProcess.Id);
 
-            foreach (IntPtr pointer in foundAddresses)
+            Parallel.ForEach(pointers, pointer =>
             {
+                byte[] buffer = new byte[Marshal.SizeOf(valueType)];
+
                 if (ReadProcessMemory(handle, pointer, buffer, (uint)buffer.Length, out nint bytesRead) && bytesRead > 0)
                 {
                     long readValue = BufferConvert(buffer, 0);
                     if (readValue == newValue)
-                        filteredPointers.Add(pointer);
+                    {
+                        filteredPointers.Add(pointer); // Add valid pointer to thread-safe collection
+                    }
                 }
-            }
+            });
         }
 
-        return [.. filteredPointers];
+        return filteredPointers.Distinct().ToList(); // Remove duplicates and convert to list
     }
 
     private static PointerNode? GetPointerChain(IEnumerable<Process> processes, IntPtr desiredPointer, int depth = 0)
