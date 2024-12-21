@@ -1,18 +1,23 @@
-﻿using System;
+﻿using MemHackMe;
+using System;
 using System.Diagnostics;
 using System.Reflection;
 using System.Reflection.Metadata;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security;
 
 internal class Program
 {
-    private static IntPtr address = IntPtr.Zero;
     private static byte[] buffer = [];
-    private static List<IntPtr> foundAddresses = [];
-    private static IntPtr handle = IntPtr.Zero;
     private static readonly uint bufferSize = 1024;
     private static Type valueType = typeof(int); // short, int, long
+
+    private static List<IntPtr> foundAddresses = [];
+    private static List<PointerNode> foundChains = [];
+    private static HashSet<IntPtr> pointerAddressesCache = [];
+
+    private static IntPtr handle = IntPtr.Zero;
 
     #region WINAPI
     // Import Windows API functions
@@ -131,14 +136,29 @@ internal class Program
             return;
         }
 
+        Console.WriteLine("Searching for addresses...");
         foundAddresses.AddRange(MemorySearch(selectedProcesses, desiredValue));
+
+        Console.WriteLine("Building up pointers cache...");
+        CacheMemoryPointers(selectedProcesses);
+
+        Console.WriteLine("Searching for pointer chains...");
+        foreach (IntPtr foundAddress in foundAddresses)
+        {
+            PointerNode? pointerChain = GetPointerChain(selectedProcesses, foundAddress);
+
+            if (pointerChain?.Nodes.Count > 0)
+                foundChains.AddRange(pointerChain.Nodes);
+        }
 
         int k = 0;
         while (true)
         {
             Console.Clear();
             Console.WriteLine("____________INFO____________");
+            Console.WriteLine($"Pointers Cache Size: {pointerAddressesCache.Count}");
             Console.WriteLine($"Addresses found: {foundAddresses.Count}");
+            Console.WriteLine($"Pointer chains found: {foundChains.Count}");
             Console.WriteLine("____________MENU____________");
             Console.WriteLine("1. Print addresses");
             Console.WriteLine("2. Filter for new value");
@@ -205,7 +225,6 @@ internal class Program
 
                         break;
                     case "4":
-                        address = IntPtr.Zero;
                         buffer = [];
                         foundAddresses = [];
                         handle = IntPtr.Zero;
@@ -227,6 +246,7 @@ internal class Program
 
         foreach (Process selectedProcess in selectedProcesses)
         {
+            IntPtr address = IntPtr.Zero;
             handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_READ), false, selectedProcess.Id);
 
             MEMORY_BASIC_INFORMATION memInfo = new();
@@ -320,6 +340,97 @@ internal class Program
         }
 
         return filteredPointers;
+    }
+
+    private static PointerNode? GetPointerChain(IEnumerable<Process> processes, IntPtr desiredPointer, int depth = 0)
+    {
+        if (depth > 5)
+            return null;
+
+        Type valueTypeBefore = valueType;
+        valueType = typeof(long);
+
+        PointerNode pointerChain = new()
+        {
+            Address = (IntPtr)desiredPointer,
+            Nodes = []
+        };
+
+        // Check performance here 
+        List<IntPtr> pointers = MemorySearch(processes, desiredPointer);
+
+        foreach (IntPtr pointer in pointers)
+        {
+            PointerNode? childPointer = GetPointerChain(processes, pointer, depth + 1);
+
+            if (childPointer != null)
+                pointerChain.Nodes.Add(childPointer);
+        }
+
+        valueType = valueTypeBefore;
+
+        return pointerChain;
+    }
+
+    private static void CacheMemoryPointers(IEnumerable<Process> selectedProcesses)
+    {
+        pointerAddressesCache.Clear();
+
+        Type valueTypeBefore = valueType;
+        valueType = typeof(long);
+        int sizeofPointer = Marshal.SizeOf(valueType);
+
+        foreach (Process selectedProcess in selectedProcesses)
+        {
+            IntPtr address = IntPtr.Zero;
+            handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_READ), false, selectedProcess.Id);
+
+            MEMORY_BASIC_INFORMATION memInfo = new();
+            uint memInfoSize = (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION));
+
+            // Search the value in the process memory
+            while (true)
+            {
+                if (!VirtualQueryEx(handle, address, out memInfo, memInfoSize))
+                    break;
+
+                // Skip uncommited memory regions 
+                if (memInfo.State == 0x10000 || memInfo.State == 0x2000)
+                {
+                    address = (IntPtr)(memInfo.BaseAddress + memInfo.RegionSize.ToInt64());
+                    continue;
+                }
+
+                // Check if the memory region is readable and writable
+                if ((memInfo.Protect & (uint)(MemoryProtection.PAGE_READWRITE | MemoryProtection.PAGE_EXECUTE_READWRITE | MemoryProtection.PAGE_READONLY)) != 0)
+                {
+                    buffer = new byte[bufferSize];
+
+                    for (long offset = 0; offset < memInfo.RegionSize; offset += bufferSize)
+                    {
+                        IntPtr currentAddress = IntPtr.Add(memInfo.BaseAddress, (int)offset);
+
+                        if (ReadProcessMemory(handle, currentAddress, buffer, bufferSize, out nint bytesRead) && bytesRead > 0)
+                        {
+                            for (int j = 0; j < bytesRead - sizeofPointer; j += sizeofPointer)
+                            {
+                                long value = BufferConvert(buffer, j);
+
+                                if (IsValidPointer((IntPtr)(value)))
+                                {
+                                    IntPtr pointer = IntPtr.Add(currentAddress, j); // Calculate the exact address
+                                    pointerAddressesCache.Add(address);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                address = (IntPtr)(memInfo.BaseAddress + memInfo.RegionSize.ToInt64());
+            }
+        }
+
+        valueType = valueTypeBefore;
     }
 
     private static bool IsValidPointer(IntPtr address)
