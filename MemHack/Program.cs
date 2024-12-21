@@ -131,7 +131,7 @@ internal class Program
             return;
         }
 
-        MemorySearch(selectedProcesses, desiredValue);
+        foundAddresses.AddRange(MemorySearch(selectedProcesses, desiredValue));
 
         int k = 0;
         while (true)
@@ -221,6 +221,46 @@ internal class Program
         }
     }
 
+    private static List<IntPtr> MemorySearch(IEnumerable<Process> selectedProcesses, long desiredValue)
+    {
+        List<IntPtr> result = [];
+
+        foreach (Process selectedProcess in selectedProcesses)
+        {
+            handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_READ), false, selectedProcess.Id);
+
+            MEMORY_BASIC_INFORMATION memInfo = new();
+            uint memInfoSize = (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION));
+
+            // Search the value in the process memory
+            while (true)
+            {
+                if (!VirtualQueryEx(handle, address, out memInfo, memInfoSize))
+                    break;
+
+                // Skip uncommited memory regions 
+                if (memInfo.State == 0x10000 || memInfo.State == 0x2000)
+                {
+                    address = (IntPtr)(memInfo.BaseAddress + memInfo.RegionSize.ToInt64());
+                    continue;
+                }
+
+                // Check if the memory region is readable and writable
+                if ((memInfo.Protect & (uint)(MemoryProtection.PAGE_READWRITE | MemoryProtection.PAGE_EXECUTE_READWRITE | MemoryProtection.PAGE_READONLY)) != 0)
+                {
+                    buffer = new byte[bufferSize];
+                    IntPtr regionBaseAddress = memInfo.BaseAddress;
+
+                    result.AddRange(GetMatchingPointers(regionBaseAddress, desiredValue, memInfo.RegionSize.ToInt64()));
+                }
+
+                address = (IntPtr)(memInfo.BaseAddress + memInfo.RegionSize.ToInt64());
+            }
+        }
+
+        return result;
+    }
+
     private static void WriteAddressValue(IntPtr targetPointer, long value)
     {
         byte[] newValueBuffer = valueType switch
@@ -235,26 +275,6 @@ internal class Program
             Console.WriteLine($"Successfully wrote value {value} to address 0x{targetPointer:X}.");
         else
             Console.WriteLine($"Failed to write memory at 0x{targetPointer:X}. Error code: {Marshal.GetLastWin32Error()}");
-    }
-
-    private static List<IntPtr> FilterPointers(List<IntPtr> pointers, long newValue)
-    {
-        List<IntPtr> filteredPointers = [];
-        byte[] buffer = new byte[Marshal.SizeOf(valueType)];
-
-        foreach (IntPtr pointer in foundAddresses)
-        {
-            if (ReadProcessMemory(handle, pointer, buffer, (uint)buffer.Length, out nint bytesRead) && bytesRead > 0)
-            {
-                long readValue = BufferConvert(buffer, 0);
-                if (readValue == newValue)
-                {
-                    filteredPointers.Add(pointer);
-                }
-            }
-        }
-
-        return filteredPointers;
     }
 
     private static List<IntPtr> GetMatchingPointers(IntPtr pointer, long desiredValue, long regionSize)
@@ -282,40 +302,24 @@ internal class Program
         return result;
     }
 
-    private static void MemorySearch(IEnumerable<Process> selectedProcesses, long desiredValue)
+    private static List<IntPtr> FilterPointers(List<IntPtr> pointers, long newValue)
     {
-        foreach (Process selectedProcess in selectedProcesses)
+        List<IntPtr> filteredPointers = [];
+        byte[] buffer = new byte[Marshal.SizeOf(valueType)];
+
+        foreach (IntPtr pointer in foundAddresses)
         {
-            handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_READ), false, selectedProcess.Id);
-
-            MEMORY_BASIC_INFORMATION memInfo = new();
-            uint memInfoSize = (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION));
-
-            // Search the value in the process memory
-            while (true)
+            if (ReadProcessMemory(handle, pointer, buffer, (uint)buffer.Length, out nint bytesRead) && bytesRead > 0)
             {
-                if (!VirtualQueryEx(handle, address, out memInfo, memInfoSize))
-                    break;
-
-                // Skip uncommited memory regions 
-                if (memInfo.State == 0x10000 || memInfo.State == 0x2000)
+                long readValue = BufferConvert(buffer, 0);
+                if (readValue == newValue)
                 {
-                    address = (IntPtr)(memInfo.BaseAddress + memInfo.RegionSize.ToInt64());
-                    continue;
+                    filteredPointers.Add(pointer);
                 }
-
-                // Check if the memory region is readable and writable
-                if ((memInfo.Protect & (uint)(MemoryProtection.PAGE_READWRITE | MemoryProtection.PAGE_EXECUTE_READWRITE | MemoryProtection.PAGE_READONLY)) != 0)
-                {
-                    buffer = new byte[bufferSize];
-                    IntPtr regionBaseAddress = memInfo.BaseAddress;
-
-                    foundAddresses.AddRange(GetMatchingPointers(regionBaseAddress, desiredValue, memInfo.RegionSize.ToInt64()));
-                }
-
-                address = (IntPtr)(memInfo.BaseAddress + memInfo.RegionSize.ToInt64());
             }
         }
+
+        return filteredPointers;
     }
 
     private static bool IsValidPointer(IntPtr address)
@@ -336,7 +340,6 @@ internal class Program
         var valueType when valueType == typeof(long) => BitConverter.ToInt64(buffer, offset),
         _ => BitConverter.ToInt32(buffer, offset),
     };
-
 
     private static void EnableDebugPrivileges()
     {
