@@ -19,6 +19,8 @@ public class Game1 : Game
 
     int searchedValue = 0;
 
+    bool canClickNextScan = false;
+
     public Game1()
     {
         _graphics = new GraphicsDeviceManager(this);
@@ -125,11 +127,16 @@ public class Game1 : Game
             }
 
             ImGui.SameLine();
+            if (!canClickNextScan)
+                ImGui.BeginDisabled(); // Disable "Next Scan" button until the condition is met
 
             if (ImGui.Button("Next Scan"))
             {
                 // Code for handling the "Next Scan" button click
             }
+            
+            if (!canClickNextScan)
+                ImGui.EndDisabled(); // End the disabled block
 
             ImGui.End();
         }
