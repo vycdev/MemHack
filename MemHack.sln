@@ -9,6 +9,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MemHackMe", "MemHackMe\MemH
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MemHackGUI", "MemHackGUI\MemHackGUI.csproj", "{CAD4C60E-C392-4F44-8DEC-186153AD61EC}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Monogame.ImGuiNet", "MonoGame.ImGuiNet\Monogame.ImGuiNet.csproj", "{6A0E607F-CBB7-4541-9EE9-147216B94B05}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{CAD4C60E-C392-4F44-8DEC-186153AD61EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CAD4C60E-C392-4F44-8DEC-186153AD61EC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CAD4C60E-C392-4F44-8DEC-186153AD61EC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6A0E607F-CBB7-4541-9EE9-147216B94B05}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6A0E607F-CBB7-4541-9EE9-147216B94B05}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6A0E607F-CBB7-4541-9EE9-147216B94B05}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6A0E607F-CBB7-4541-9EE9-147216B94B05}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
