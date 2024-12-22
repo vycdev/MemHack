@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using MonoGame.ImGuiNet;
+using System.Collections.Generic;
 
 namespace MemHackGUI;
 public class Game1 : Game
@@ -11,6 +12,9 @@ public class Game1 : Game
     private SpriteBatch _spriteBatch;
     private static ImGuiRenderer GuiRenderer;
     bool _toolActive = true;
+
+    List<(nint hWnd, string title, uint processId)> windows = [];
+    int selectedWindowIndex = 0;
 
     public Game1()
     {
@@ -25,6 +29,12 @@ public class Game1 : Game
 
         // allow window resize
         Window.AllowUserResizing = true;
+
+        // set window title
+        Window.Title = "MemHack";
+
+        // Get all opened windows 
+        windows = MemHack.Program.GetAllWindows();
     }
 
     protected override void Initialize()
@@ -88,7 +98,22 @@ public class Game1 : Game
         var dockedWindowFlags = ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoMove;
         if (ImGui.Begin("MemHack", dockedWindowFlags))
         {
-            ImGui.Text("This panel is docked inside the game window.");
+            if (ImGui.BeginCombo("Select Window", windows[selectedWindowIndex].title))
+            {
+                for (int i = 0; i < windows.Count; i++)
+                {
+                    bool isSelected = (selectedWindowIndex == i);
+                    if (ImGui.Selectable(windows[i].title, isSelected))
+                        selectedWindowIndex = i;
+
+                    // Highlight the selected item
+                    if (isSelected)
+                        ImGui.SetItemDefaultFocus();
+                }
+
+                ImGui.EndCombo();
+            }
+
             ImGui.End();
         }
 
