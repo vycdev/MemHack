@@ -5,7 +5,9 @@ VisualStudioVersion = 17.11.35327.3
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MemHack", "MemHack\MemHack.csproj", "{AA2A0F91-5D74-4DCB-83ED-410C3B6B37B7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MemHackMe", "MemHackMe\MemHackMe.csproj", "{85846298-5E64-4DE9-999F-0FA5B4404FA1}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MemHackMe", "MemHackMe\MemHackMe.csproj", "{85846298-5E64-4DE9-999F-0FA5B4404FA1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MemHackGUI", "MemHackGUI\MemHackGUI.csproj", "{CAD4C60E-C392-4F44-8DEC-186153AD61EC}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +23,10 @@ Global
 		{85846298-5E64-4DE9-999F-0FA5B4404FA1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{85846298-5E64-4DE9-999F-0FA5B4404FA1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{85846298-5E64-4DE9-999F-0FA5B4404FA1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CAD4C60E-C392-4F44-8DEC-186153AD61EC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CAD4C60E-C392-4F44-8DEC-186153AD61EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CAD4C60E-C392-4F44-8DEC-186153AD61EC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CAD4C60E-C392-4F44-8DEC-186153AD61EC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
