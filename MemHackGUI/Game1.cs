@@ -117,7 +117,7 @@ public class Game1 : Game
                 ImGui.EndCombo();
             }
 
-            ImGui.InputInt("Search value", ref searchedValue);
+            ImGui.InputInt("Scan value", ref searchedValue);
 
             if (ImGui.Button("New Scan"))
             {
