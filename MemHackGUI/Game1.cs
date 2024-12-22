@@ -19,6 +19,12 @@ public class Game1 : Game
 
     int searchedValue = 0;
 
+    int selectedPointerIndex = -1;
+    List<IntPtr> foundPointers = [];
+
+    int itemsPerPage = 20; // Number of items to display per page
+    int currentPage = 0; // Track the current page (starting at 0)
+
     bool canClickNextScan = false;
 
     public Game1()
@@ -123,6 +129,8 @@ public class Game1 : Game
 
             if (ImGui.Button("New Scan"))
             {
+                selectedPointerIndex = -1;
+                foundPointers = MemHack.Program.MemorySearch(windows[selectedWindowIndex].processId, searchedValue);
                 // Code for handling the "New Scan" button click
             }
 
@@ -134,9 +142,56 @@ public class Game1 : Game
             {
                 // Code for handling the "Next Scan" button click
             }
-            
+
             if (!canClickNextScan)
                 ImGui.EndDisabled(); // End the disabled block
+
+            ImGui.Text($"Found Addresses: {foundPointers.Count}");
+
+            // Pagination settings
+            int totalItems = foundPointers.Count;
+            int totalPages = (int)Math.Ceiling((float)totalItems / itemsPerPage);
+
+            // Calculate the range of items to display based on the current page
+            int startIndex = currentPage * itemsPerPage;
+            int endIndex = Math.Min(startIndex + itemsPerPage, totalItems);
+
+            // Begin scrollable area (child window)
+            ImGui.BeginChild("Scrollable List", new System.Numerics.Vector2(0, 200), ImGuiChildFlags.None, ImGuiWindowFlags.AlwaysVerticalScrollbar);
+
+            // Render the items for the current page
+            for (int i = startIndex; i < endIndex; i++)
+            {
+                bool isSelected = (selectedPointerIndex == i);
+                if (ImGui.Selectable($"0x{foundPointers[i]:X}", isSelected)) // Use item index or other string representation
+                    selectedPointerIndex = i; // Update selected item index
+
+                if (isSelected)
+                    ImGui.SetItemDefaultFocus(); // Focus the selected item
+            }
+
+            // End child window
+            ImGui.EndChild();
+
+            // Pagination Controls
+            ImGui.Spacing(); // Adds some space between the list and the pagination buttons
+
+            // Previous Page Button
+            if (currentPage > 0 && ImGui.Button("Previous Page"))
+                currentPage--; // Go to the previous page
+
+            if(currentPage > 0)
+                ImGui.SameLine(); // Place the next button on the same line
+
+            // Next Page Button
+            if (currentPage < totalPages - 1 && ImGui.Button("Next Page"))
+                currentPage++; // Go to the next page
+
+            // Display Page Info (e.g., "Page 1 of 10")
+            if(currentPage < totalPages)
+                ImGui.SameLine();
+            
+            ImGui.Text($"Page {currentPage + 1} of {totalPages}");
 
             ImGui.End();
         }
