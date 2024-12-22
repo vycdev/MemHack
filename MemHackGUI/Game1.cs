@@ -18,6 +18,7 @@ public class Game1 : Game
     int selectedWindowIndex = 0;
 
     int searchedValue = 0;
+    int newValue = 0;
 
     int selectedPointerIndex = -1;
     List<IntPtr> foundPointers = [];
@@ -25,7 +26,7 @@ public class Game1 : Game
     int itemsPerPage = 20; // Number of items to display per page
     int currentPage = 0; // Track the current page (starting at 0)
 
-    bool canClickNextScan = false;
+    string writeValueResult = "";
 
     public Game1()
     {
@@ -131,19 +132,19 @@ public class Game1 : Game
             {
                 selectedPointerIndex = -1;
                 foundPointers = MemHack.Program.MemorySearch(windows[selectedWindowIndex].processId, searchedValue);
-                // Code for handling the "New Scan" button click
             }
 
             ImGui.SameLine();
-            if (!canClickNextScan)
+            if (foundPointers.Count == 0)
                 ImGui.BeginDisabled(); // Disable "Next Scan" button until the condition is met
 
             if (ImGui.Button("Next Scan"))
             {
-                // Code for handling the "Next Scan" button click
+                selectedPointerIndex = -1; 
+                foundPointers = MemHack.Program.FilterPointers(windows[selectedWindowIndex].processId, foundPointers, searchedValue);
             }
 
-            if (!canClickNextScan)
+            if (foundPointers.Count == 0)
                 ImGui.EndDisabled(); // End the disabled block
 
             ImGui.Text($"Found Addresses: {foundPointers.Count}");
@@ -192,6 +193,19 @@ public class Game1 : Game
                 ImGui.SameLine();
             
             ImGui.Text($"Page {currentPage + 1} of {totalPages}");
+
+            ImGui.InputInt("New value", ref newValue);
+
+            if(selectedPointerIndex == -1)
+                ImGui.BeginDisabled(); // Disable "Write Value" button until the condition is met
+
+            if (ImGui.Button("Write Value"))
+                writeValueResult = MemHack.Program.WriteAddressValue(windows[selectedWindowIndex].processId, foundPointers[selectedPointerIndex], newValue);
+
+            if(selectedPointerIndex == -1)
+                ImGui.EndDisabled(); // Disable "Write Value" button until the condition is met
+
+            ImGui.Text(writeValueResult);
 
             ImGui.End();
         }

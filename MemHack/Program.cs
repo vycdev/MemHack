@@ -308,17 +308,14 @@ public class Program
         return [.. result.Distinct()];
     }
 
-    public static void WriteAddressValue(uint processId, nint targetPointer, long value)
+    public static string WriteAddressValue(uint processId, nint targetPointer, long value)
     {
         byte[] newValueBuffer = BitConverter.GetBytes(value);
 
         nint handle = OpenProcess((long)(ProcessAccessFlags.PROCESS_VM_READ | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_QUERY_INFORMATION | ProcessAccessFlags.PROCESS_VM_OPERATION), false, processId);
 
         if (handle == nint.Zero)
-        {
-            Console.WriteLine($"Failed to open process {processId}. Error: {Marshal.GetLastWin32Error()}");
-            return;
-        }
+            return ($"Failed to open process {processId}. Error: {Marshal.GetLastWin32Error()}");
 
         if (VirtualQueryEx(handle, targetPointer, out MEMORY_BASIC_INFORMATION memInfo, (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION))))
         {
@@ -328,28 +325,22 @@ public class Program
             Console.WriteLine($"State: 0x{memInfo.State:X}");
 
             if (memInfo.State != 0x1000)
-            {
-                Console.WriteLine($"Address 0x{targetPointer:X} is not in a committed state.");
-                return;
-            }
+                return ($"Address 0x{targetPointer:X} is not in a committed state.");
 
             if ((memInfo.Protect & (uint)(MemoryProtection.PAGE_READWRITE | MemoryProtection.PAGE_EXECUTE_READWRITE)) == 0)
             {
                 Console.WriteLine($"Address 0x{targetPointer:X} does not have write permissions. Attempting to change protection...");
                 if (!VirtualProtectEx(handle, targetPointer, (uint)newValueBuffer.Length, (uint)MemoryProtection.PAGE_READWRITE, out uint oldProtect))
-                {
-                    Console.WriteLine($"Failed to change protection for address 0x{targetPointer:X}. Error: {Marshal.GetLastWin32Error()}");
-                    return;
-                }
+                    return ($"Failed to change protection for address 0x{targetPointer:X}. Error: {Marshal.GetLastWin32Error()}");
             }
 
             if (WriteProcessMemory(handle, targetPointer, newValueBuffer, (uint)newValueBuffer.Length, out nint bytesWritten) && bytesWritten == newValueBuffer.Length)
-                Console.WriteLine($"Successfully wrote value {value} to address 0x{targetPointer:X}.");
+                return ($"Successfully wrote value {value} to address 0x{targetPointer:X}.");
             else
-                Console.WriteLine($"Failed to write memory at 0x{targetPointer:X}. Error code: {Marshal.GetLastWin32Error()}");
+                return ($"Failed to write memory at 0x{targetPointer:X}. Error code: {Marshal.GetLastWin32Error()}");
         }
         else
-            Console.WriteLine($"VirtualQueryEx failed for address 0x{targetPointer:X}. Error: {Marshal.GetLastWin32Error()}");
+            return ($"VirtualQueryEx failed for address 0x{targetPointer:X}. Error: {Marshal.GetLastWin32Error()}");
     }
 
     public static List<nint> FilterPointers(uint processId, List<nint> pointers, long newValue)
