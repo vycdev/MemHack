@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using MonoGame.ImGuiNet;
+using System;
 using System.Collections.Generic;
 
 namespace MemHackGUI;
@@ -15,6 +16,8 @@ public class Game1 : Game
 
     List<(nint hWnd, string title, uint processId)> windows = [];
     int selectedWindowIndex = 0;
+
+    int searchedValue = 0;
 
     public Game1()
     {
@@ -112,6 +115,20 @@ public class Game1 : Game
                 }
 
                 ImGui.EndCombo();
+            }
+
+            ImGui.InputInt("Search value", ref searchedValue);
+
+            if (ImGui.Button("New Scan"))
+            {
+                // Code for handling the "New Scan" button click
+            }
+
+            ImGui.SameLine();
+
+            if (ImGui.Button("Next Scan"))
+            {
+                // Code for handling the "Next Scan" button click
             }
 
             ImGui.End();
