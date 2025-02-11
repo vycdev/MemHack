@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.11.35327.3
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MemHack", "MemHack\MemHack.csproj", "{AA2A0F91-5D74-4DCB-83ED-410C3B6B37B7}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MemHackConsole", "MemHack\MemHackConsole.csproj", "{AA2A0F91-5D74-4DCB-83ED-410C3B6B37B7}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MemHackMe", "MemHackMe\MemHackMe.csproj", "{85846298-5E64-4DE9-999F-0FA5B4404FA1}"
 EndProject
