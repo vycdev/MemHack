@@ -91,8 +91,7 @@ public class Program
     {
         IMemHack memHack = new MemHackWin();
 
-
-        List<(string title, uint processId)> windows = memHack.GetAllWindows();
+        List<(string title, uint processId)> windows = memHack.GetAllProcesses();
         int j = 0;
         foreach ((string title, uint processId) window in windows)
         {
