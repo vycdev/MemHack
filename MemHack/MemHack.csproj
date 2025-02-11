@@ -8,4 +8,8 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\MemHackLib\MemHackLib.csproj" />
+  </ItemGroup>
+
 </Project>
