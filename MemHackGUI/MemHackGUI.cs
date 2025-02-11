@@ -121,12 +121,6 @@ public class MemHackGUI : Game
         var dockedWindowFlags = ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoMove;
         if (ImGui.Begin("MemHack", dockedWindowFlags))
         {
-            if(ImGui.Button("Refresh Windows"))
-            {
-                processList = useProcesses ? MemHack.GetAllProcesses() : MemHack.GetAllWindows();
-                selectedWindowIndex = 0;
-            }
-
             if(ImGui.Checkbox("List all processes", ref useProcesses))
             {
                 if(useProcesses != prevUseProcesses)
@@ -152,7 +146,16 @@ public class MemHackGUI : Game
                 ImGui.EndCombo();
             }
 
+
             ImGui.InputInt("Scan value", ref searchedValue);
+            
+            if (ImGui.Button("Refresh Process List"))
+            {
+                processList = useProcesses ? MemHack.GetAllProcesses() : MemHack.GetAllWindows();
+                selectedWindowIndex = 0;
+            }
+
+            ImGui.SameLine();
 
             if (ImGui.Button("New Scan"))
             {
@@ -161,6 +164,7 @@ public class MemHackGUI : Game
             }
 
             ImGui.SameLine();
+            
             if (foundPointers.Count == 0)
                 ImGui.BeginDisabled(); // Disable "Next Scan" button until the condition is met
 
