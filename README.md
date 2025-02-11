@@ -12,19 +12,19 @@
 # Features to consider: 
 Most of these were taken from Youtube comments and Discord suggestions.
 
-[ ] Linux 
-	[ ] Flatpack version
-[ ] Memory mapping
-[x] Ability to select a process or a window
-[ ] Pointer scanning
-[ ] Lua scripting support
-[ ] Value type selector
-[ ] Strings support 
-[ ] Dll injection 
+- [ ] Linux 
+	- [ ] Flatpack version
+- [ ] Memory mapping
+- [x] Ability to select a process or a window
+- [ ] Pointer scanning
+- [ ] Lua scripting support
+- [ ] Value type selector
+- [ ] Strings support 
+- [ ] Dll injection 
 
 Other things to consider: 
-[x] CI/CD 
-[ ] Unit testing 
+- [x] CI/CD 
+- [ ] Unit testing 
 
 ### Credits
 Huge inspiration from LLGD: 
