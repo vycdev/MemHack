@@ -7,8 +7,8 @@ namespace MemHack;
 public class Program
 {
     private static byte[] buffer = [];
-    private const uint bufferSize = 1024;
-    private static Type valueType = typeof(int); // short, int, long
+    //private const uint bufferSize = 1024;
+    //private static Type valueType = typeof(int); // short, int, long
 
     private static List<nint> foundAddresses = [];
 
