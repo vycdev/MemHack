@@ -17,7 +17,7 @@ public class MemHackGUI : Game
 
     bool useProcesses = false;
 
-    List<(string title, uint processId)> windowsProcesses = [];
+    List<(string title, uint processId)> processList = [];
     int selectedWindowIndex = 0;
 
     int searchedValue = 0;
@@ -54,7 +54,7 @@ public class MemHackGUI : Game
         MemHack = new MemHackWin();
 
         // Get all opened windows 
-        windowsProcesses = MemHack.GetAllWindows();
+        processList = MemHack.GetAllWindows();
     }
 
     protected override void Initialize()
@@ -114,26 +114,34 @@ public class MemHackGUI : Game
         // Ensure dockable windows are placed inside the dockspace
         ImGui.SetNextWindowDockID(dockspaceId, ImGuiCond.Always);
 
+        // Save previous state of useProcesses
+        bool prevUseProcesses = useProcesses;
+
         // Add content to the docked window
         var dockedWindowFlags = ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoMove;
         if (ImGui.Begin("MemHack", dockedWindowFlags))
         {
             if(ImGui.Button("Refresh Windows"))
             {
-                windowsProcesses = MemHack.GetAllWindows();
+                processList = useProcesses ? MemHack.GetAllProcesses() : MemHack.GetAllWindows();
+                selectedWindowIndex = 0;
             }
 
             if(ImGui.Checkbox("List all processes", ref useProcesses))
             {
-
+                if(useProcesses != prevUseProcesses)
+                {
+                    processList = useProcesses ? MemHack.GetAllProcesses() : MemHack.GetAllWindows();
+                    selectedWindowIndex = 0;
+                }
             }
 
-            if (ImGui.BeginCombo("Select Process", windowsProcesses[selectedWindowIndex].title))
+            if (ImGui.BeginCombo("Select Process", processList[selectedWindowIndex].title))
             {
-                for (int i = 0; i < windowsProcesses.Count; i++)
+                for (int i = 0; i < processList.Count; i++)
                 {
                     bool isSelected = (selectedWindowIndex == i);
-                    if (ImGui.Selectable(windowsProcesses[i].title, isSelected))
+                    if (ImGui.Selectable(processList[i].title, isSelected))
                         selectedWindowIndex = i;
 
                     // Highlight the selected item
@@ -149,7 +157,7 @@ public class MemHackGUI : Game
             if (ImGui.Button("New Scan"))
             {
                 selectedPointerIndex = -1;
-                foundPointers = MemHack.MemorySearch(windowsProcesses[selectedWindowIndex].processId, searchedValue);
+                foundPointers = MemHack.MemorySearch(processList[selectedWindowIndex].processId, searchedValue);
             }
 
             ImGui.SameLine();
@@ -159,7 +167,7 @@ public class MemHackGUI : Game
             if (ImGui.Button("Next Scan"))
             {
                 selectedPointerIndex = -1; 
-                foundPointers = MemHack.FilterPointers(windowsProcesses[selectedWindowIndex].processId, foundPointers, searchedValue);
+                foundPointers = MemHack.FilterPointers(processList[selectedWindowIndex].processId, foundPointers, searchedValue);
             }
 
             if (foundPointers.Count == 0)
@@ -218,7 +226,7 @@ public class MemHackGUI : Game
                 ImGui.BeginDisabled(); // Disable "Write Value" button until the condition is met
 
             if (ImGui.Button("Write Value"))
-                writeValueResult = MemHack.WriteAddressValue(windowsProcesses[selectedWindowIndex].processId, foundPointers[selectedPointerIndex], newValue);
+                writeValueResult = MemHack.WriteAddressValue(processList[selectedWindowIndex].processId, foundPointers[selectedPointerIndex], newValue);
 
             if(selectedPointerIndex == -1)
                 ImGui.EndDisabled(); // Disable "Write Value" button until the condition is met
