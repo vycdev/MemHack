@@ -1,4 +1,5 @@
 ﻿using ImGuiNET;
+using MemHackLib;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -7,14 +8,14 @@ using System;
 using System.Collections.Generic;
 
 namespace MemHackGUI;
-public class Game1 : Game
+public class MemHackGUI : Game
 {
     private GraphicsDeviceManager _graphics;
     private SpriteBatch _spriteBatch;
     private static ImGuiRenderer GuiRenderer;
     bool _toolActive = true;
 
-    List<(nint hWnd, string title, uint processId)> windows = [];
+    List<(string title, uint processId)> windows = [];
     int selectedWindowIndex = 0;
 
     int searchedValue = 0;
@@ -28,7 +29,9 @@ public class Game1 : Game
 
     string writeValueResult = "";
 
-    public Game1()
+    IMemHack MemHack;
+
+    public MemHackGUI()
     {
         _graphics = new GraphicsDeviceManager(this);
         Content.RootDirectory = "Content";
@@ -45,8 +48,11 @@ public class Game1 : Game
         // set window title
         Window.Title = "MemHack";
 
+        // Init hacking library
+        MemHack = new MemHackWin();
+
         // Get all opened windows 
-        windows = MemHack.Program.GetAllWindows();
+        windows = MemHack.GetAllWindows();
     }
 
     protected override void Initialize()
@@ -131,7 +137,7 @@ public class Game1 : Game
             if (ImGui.Button("New Scan"))
             {
                 selectedPointerIndex = -1;
-                foundPointers = MemHack.Program.MemorySearch(windows[selectedWindowIndex].processId, searchedValue);
+                foundPointers = MemHack.MemorySearch(windows[selectedWindowIndex].processId, searchedValue);
             }
 
             ImGui.SameLine();
@@ -141,7 +147,7 @@ public class Game1 : Game
             if (ImGui.Button("Next Scan"))
             {
                 selectedPointerIndex = -1; 
-                foundPointers = MemHack.Program.FilterPointers(windows[selectedWindowIndex].processId, foundPointers, searchedValue);
+                foundPointers = MemHack.FilterPointers(windows[selectedWindowIndex].processId, foundPointers, searchedValue);
             }
 
             if (foundPointers.Count == 0)
@@ -200,7 +206,7 @@ public class Game1 : Game
                 ImGui.BeginDisabled(); // Disable "Write Value" button until the condition is met
 
             if (ImGui.Button("Write Value"))
-                writeValueResult = MemHack.Program.WriteAddressValue(windows[selectedWindowIndex].processId, foundPointers[selectedPointerIndex], newValue);
+                writeValueResult = MemHack.WriteAddressValue(windows[selectedWindowIndex].processId, foundPointers[selectedPointerIndex], newValue);
 
             if(selectedPointerIndex == -1)
                 ImGui.EndDisabled(); // Disable "Write Value" button until the condition is met

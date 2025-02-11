@@ -1,2 +1,2 @@
-﻿using var game = new MemHackGUI.Game1();
+﻿using var game = new MemHackGUI.MemHackGUI();
 game.Run();
