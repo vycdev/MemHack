@@ -10,13 +10,13 @@ public interface IMemHack
     public const uint BufferSize = 1024;
     public Type ValueType { get; set; }
 
-    public static List<nint> MemorySearch(uint processId, long desiredValue);
+    public List<nint> MemorySearch(uint processId, long desiredValue);
 
-    public static string WriteAddressValue(uint processId, nint targetPointer, long value);
+    public string WriteAddressValue(uint processId, nint targetPointer, long value);
 
-    public static List<nint> FilterPointers(uint processId, List<nint> pointers, long newValue);
+    public List<nint> FilterPointers(uint processId, List<nint> pointers, long newValue);
 
 
-    public static List<(nint hWnd, string title, uint processId)> GetAllWindows();
-
+    public List<(string title, uint processId)> GetAllWindows();
+    public List<(string title, uint processId)> GetAllProcesses();
 }
