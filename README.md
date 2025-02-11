@@ -22,6 +22,10 @@ Most of these were taken from Youtube comments and Discord suggestions.
 [ ] Strings support 
 [ ] Dll injection 
 
+Other things to consider: 
+[x] CI/CD 
+[ ] Unit testing 
+
 ### Credits
 Huge inspiration from LLGD: 
 https://github.com/meemknight/memGrab
