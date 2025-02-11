@@ -9,7 +9,6 @@
 
 ![alt text](image-1.png)
 
-
 # Features to consider: 
 Most of these were taken from Youtube comments and Discord suggestions.
 
