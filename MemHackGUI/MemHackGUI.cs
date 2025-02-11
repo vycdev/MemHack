@@ -118,7 +118,17 @@ public class MemHackGUI : Game
         var dockedWindowFlags = ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoMove;
         if (ImGui.Begin("MemHack", dockedWindowFlags))
         {
-            if (ImGui.BeginCombo("Select Window", windowsProcesses[selectedWindowIndex].title))
+            if(ImGui.Button("Refresh Windows"))
+            {
+                windowsProcesses = MemHack.GetAllWindows();
+            }
+
+            if(ImGui.Checkbox("List all processes", ref useProcesses))
+            {
+
+            }
+
+            if (ImGui.BeginCombo("Select Process", windowsProcesses[selectedWindowIndex].title))
             {
                 for (int i = 0; i < windowsProcesses.Count; i++)
                 {
