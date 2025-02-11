@@ -89,7 +89,23 @@ namespace MemHackLib
 
         public List<nint> FilterPointers(uint processId, List<nint> pointers, long newValue)
         {
-            throw new NotImplementedException();
+            ConcurrentBag<nint> filteredPointers = [];
+
+            nint handle = OpenProcess((int)(ProcessAccessFlags.PROCESS_VM_OPERATION | ProcessAccessFlags.PROCESS_VM_WRITE | ProcessAccessFlags.PROCESS_VM_READ), false, processId);
+
+            Parallel.ForEach(pointers, pointer =>
+            {
+                byte[] buffer = new byte[Marshal.SizeOf(ValueType)];
+
+                if (ReadProcessMemory(handle, pointer, buffer, (uint)buffer.Length, out nint bytesRead) && bytesRead > 0)
+                {
+                    long readValue = Utils.BufferConvert(buffer, 0, ValueType);
+                    if (readValue == newValue)
+                        filteredPointers.Add(pointer); // Add valid pointer to thread-safe collection
+                }
+            });
+
+            return filteredPointers.Distinct().ToList(); // Remove duplicates and convert to list
         }
 
         public List<(string title, uint processId)> GetAllProcesses()
