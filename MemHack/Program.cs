@@ -375,7 +375,7 @@ public class Program
     // Method to get a list of all windows
     public static List<(nint hWnd, string title, uint processId)> GetAllWindows()
     {
-        List<(nint hWnd, string title, uint processId)> windows = new();
+        List<(nint hWnd, string title, uint processId)> windows = [];
 
         EnumWindows((hWnd, lParam) =>
         {

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -93,12 +94,26 @@ namespace MemHackLib
 
         public List<(string title, uint processId)> GetAllProcesses()
         {
-            throw new NotImplementedException();
+            List<(string title, uint processId)> processes = [];
+
+            foreach (var process in Process.GetProcesses())
+            {
+                try
+                {
+                    processes.Add((process.ProcessName, (uint)process.Id));
+                }
+                catch
+                {
+                    // Ignore any processes that might no longer exist
+                }
+            }
+
+            return processes;
         }
 
         public List<(string title, uint processId)> GetAllWindows()
         {
-            List<(string title, uint processId)> windows = new();
+            List<(string title, uint processId)> windows = [];
 
             EnumWindows((hWnd, lParam) =>
             {

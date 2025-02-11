@@ -48,7 +48,7 @@ public class ImGuiRenderer
         _game = game ?? throw new ArgumentNullException(nameof(game));
         _graphicsDevice = game.GraphicsDevice;
 
-        _loadedTextures = new Dictionary<IntPtr, Texture2D>();
+        _loadedTextures = [];
 
         _rasterizerState = new RasterizerState()
         {
