@@ -51,7 +51,7 @@ public class MemHackGUI : Game
         Window.Title = "MemHack";
 
         // Init hacking library
-        MemHack = new MemHackWin();
+        MemHack = IMemHack.Create();
 
         // Get all opened windows 
         processList = MemHack.GetAllWindows();

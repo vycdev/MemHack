@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace MemHackLib;
 
-public class Utils
+public static class Utils
 {
     public static long BufferConvert(byte[] buffer, int offset, Type type) => type switch
     {
@@ -15,5 +15,4 @@ public class Utils
         var valueType when valueType == typeof(long) => BitConverter.ToInt64(buffer, offset),
         _ => BitConverter.ToInt32(buffer, offset),
     };
-
 }

@@ -12,7 +12,7 @@ public class Program
 
     private static void Main(string[] args)
     {
-        IMemHack memHack = new MemHackWin();
+        IMemHack memHack = IMemHack.Create();
 
         List<(string title, uint processId)> windows = memHack.GetAllProcesses();
         int j = 0;
