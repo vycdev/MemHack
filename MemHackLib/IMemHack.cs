@@ -13,17 +13,11 @@ public interface IMemHack
 
     public static IMemHack Create() {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
             return new MemHackWin(); // Windows-specific implementation
-        }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
             return new MemHackLin(); // Linux-specific implementation
-        }
         else
-        {
             throw new PlatformNotSupportedException("This platform is not supported.");
-        }
     }
 
     public Type ValueType { get; set; }
