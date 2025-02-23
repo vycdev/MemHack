@@ -130,7 +130,7 @@ public class MemHackGUI : Game
                 }
             }
 
-            if (ImGui.BeginCombo("Select Process", processList[selectedWindowIndex].title))
+            if (ImGui.BeginCombo("Select Process", processList.Count == 0 ? "No Process Found" : processList[selectedWindowIndex].title))
             {
                 for (int i = 0; i < processList.Count; i++)
                 {
