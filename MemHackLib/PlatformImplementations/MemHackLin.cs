@@ -316,6 +316,17 @@ namespace MemHackLib.PlatformImplementations
             return processId;
         }
 
+        // Close the process handle using ptrace
+        private void CloseProcess(int processId)
+        {
+            // Detach from the target process using ptrace (PTRACE_DETACH)
+            int result = ptrace(PTRACE_DETACH, processId, nint.Zero, nint.Zero);
+
+            // If ptrace fails, throw an exception
+            if (result == -1)
+                throw new InvalidOperationException($"Failed to detach from process {processId}. Error: {Marshal.GetLastWin32Error()}");
+        }
+
         public List<nint> MemorySearch(uint processId, long desiredValue)
         {
             ConcurrentBag<nint> result = [];
@@ -378,6 +389,9 @@ namespace MemHackLib.PlatformImplementations
                 });
             }
 
+            // Close the process handle
+            CloseProcess((int)processId);
+
             return result.Distinct().ToList(); // Return unique results
         }
 
@@ -401,7 +415,7 @@ namespace MemHackLib.PlatformImplementations
                 return $"Failed to write memory at 0x{targetPointer:X}. Error code: {Marshal.GetLastWin32Error()}";
 
             // Detach from the process once writing is done
-            ptrace(PTRACE_DETACH, (int)processId, nint.Zero, nint.Zero);
+            CloseProcess((int)processId);
 
             return $"Successfully wrote value {value} to address 0x{targetPointer:X}.";
         }
