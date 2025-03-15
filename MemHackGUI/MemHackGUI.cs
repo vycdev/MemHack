@@ -53,8 +53,8 @@ public class MemHackGUI : Game
         // Init hacking library
         MemHack = IMemHack.Create();
 
-        // Get all opened windows 
-        processList = MemHack.GetAllWindows();
+        // Get all opened processes 
+        processList = MemHack.GetAllProcesses();
     }
 
     protected override void Initialize()
