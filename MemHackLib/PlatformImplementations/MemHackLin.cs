@@ -398,7 +398,7 @@ namespace MemHackLib.PlatformImplementations
         // Write value to process memory
         public string WriteAddressValue(uint processId, nint targetPointer, long value)
         {
-            byte[] newValueBuffer = BitConverter.GetBytes(value);
+            byte[] newValueBuffer = BitConverter.GetBytes((int)value);
 
             // Open the process memory using ptrace
             nint handle = OpenProcess((int)processId);
@@ -406,13 +406,10 @@ namespace MemHackLib.PlatformImplementations
             if (handle == nint.Zero)
                 return $"Failed to open process {processId}. Error: {Marshal.GetLastWin32Error()}";
 
-            // create new long pointer
-            nint valuePtr = new(value);
-
             // Use ptrace PTRACE_POKEDATA to write the memory value
             nint addr = new(targetPointer);
             nint data = Marshal.UnsafeAddrOfPinnedArrayElement(newValueBuffer, 0);
-            int result = ptrace(PTRACE_POKEDATA, (int)processId, addr, valuePtr);
+            int result = ptrace(PTRACE_POKEDATA, (int)processId, addr, data);
 
             if (result == -1)
                 return $"Failed to write memory at 0x{targetPointer:X}. Error code: {Marshal.GetLastWin32Error()}";
