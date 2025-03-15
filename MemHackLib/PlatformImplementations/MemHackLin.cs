@@ -398,8 +398,6 @@ namespace MemHackLib.PlatformImplementations
         // Write value to process memory
         public string WriteAddressValue(uint processId, nint targetPointer, long value)
         {
-            byte[] newValueBuffer = BitConverter.GetBytes((int)value);
-
             // Open the process memory using ptrace
             nint handle = OpenProcess((int)processId);
 
@@ -408,7 +406,19 @@ namespace MemHackLib.PlatformImplementations
 
             // Use ptrace PTRACE_POKEDATA to write the memory value
             nint addr = new(targetPointer);
-            nint data = Marshal.UnsafeAddrOfPinnedArrayElement(newValueBuffer, 0);
+            nint data;
+
+            if(ValueType == typeof(int))
+                data = new((int)value);
+            else if (ValueType == typeof(long))
+                data = new((long)value);
+            else if (ValueType == typeof(short))
+                data = new((short)value);
+            else if (ValueType == typeof(byte))
+                data = new((byte)value);
+            else
+                return "Unsupported value type.";
+
             int result = ptrace(PTRACE_POKEDATA, (int)processId, addr, data);
 
             if (result == -1)
