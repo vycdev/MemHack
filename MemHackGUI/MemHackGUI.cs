@@ -15,7 +15,7 @@ public class MemHackGUI : Game
     private static ImGuiRenderer GuiRenderer;
     bool _toolActive = true;
 
-    bool useProcesses = false;
+    bool useProcesses = true;
 
     List<(string title, uint processId)> processList = [];
     int selectedWindowIndex = 0;
