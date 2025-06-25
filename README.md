@@ -11,23 +11,6 @@ MemHack is a Cheat Engine clone written in C#. It provides the basic functionali
 
 ![alt text](Resources/image-1.png)
 
-# Features to consider: 
-Most of these were taken from Youtube comments and Discord suggestions.
-
-- [x] Linux 
-	- [ ] Flatpack version
-- [ ] Memory mapping
-- [x] Ability to select a process or a window
-- [ ] Pointer scanning
-- [ ] Lua scripting support
-- [ ] Value type selector
-- [ ] Strings support 
-- [ ] Dll injection 
-
-Other things to consider: 
-- [x] CI/CD 
-- [ ] Unit testing 
-
 # Project Structure
 
 ### **MemHackConsole**  
